@@ -1,0 +1,28 @@
+{
+  "name": "sistema",
+  "version": "0.0.0",
+  "description": "Dependency injection library",
+  "main": "index.js",
+  "scripts": {
+    "test": "zUnit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sithmel/sistema.git"
+  },
+  "keywords": ["dependency injection"],
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/sithmel/sistema/issues"
+  },
+  "homepage": "https://github.com/sithmel/sistema#readme",
+  "devDependencies": {
+    "husky": "^8.0.3",
+    "prettier": "^2.8.8",
+    "zunit": "^4.0.2"
+  },
+  "prettier": {
+    "semi": false
+  }
+}
