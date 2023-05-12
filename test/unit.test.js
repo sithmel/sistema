@@ -323,8 +323,68 @@ describe("dependency", () => {
       })
     })
   })
+
+  describe("shutdown", () => {
+    let runner,
+      a,
+      b,
+      c,
+      d,
+      stopOrder = []
+
+    beforeEach(function () {
+      /*
+  
+        A ----> B
+        |     / |
+        |    /  |
+        |   /   |
+        |  /    |
+        | /     |
+        VV      V
+        C ----> D
+  
+      */
+      runner = new Runner()
+      a = new SystemDependency(
+        [],
+        () => {},
+        () => {
+          stopOrder.push("A")
+        }
+      )
+      b = new SystemDependency(
+        [a],
+        () => {},
+        () => {
+          stopOrder.push("B")
+        }
+      )
+      c = new SystemDependency(
+        [a, b],
+        () => {},
+        () => {
+          stopOrder.push("C")
+        }
+      )
+      d = new SystemDependency(
+        [b, c],
+        () => {},
+        () => {
+          stopOrder.push("D")
+        }
+      )
+    })
+
+    oit("must return leftmost dep", async () => {
+      await runner.run(d)
+      console.log(runner.startedDependencies.size)
+      await runner.shutdown()
+      assert.deepEqual(stopOrder, ["D", "C", "B", "A"])
+    })
+  })
 })
 
 // global shutdown
+// signal and other stuff
 // non DAC
-// ValueDependency creates a memory leak in the runner
