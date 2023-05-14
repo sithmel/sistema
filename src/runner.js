@@ -48,25 +48,25 @@ class Runner {
 
     const adj = new AdjacencyListUtils(Array.from(this.startedDependencies))
 
+    // if all nodes of the graph have at least a dependency, there is no way to
+    // stop the dependencies in the right order (there are cycles)
     if (adj.emptyDeps.size === 0 && adj.adjacencyList.size !== 0) {
       throw new Error(
         "The dependency graph is not a DAC (directed acyclic graph)"
       )
     }
 
-    const dependenciesBeingShutDown = new Set()
-
     const shutDownDep = async (d) => {
-      if (dependenciesBeingShutDown.has(d)) {
+      if (!this.startedDependencies.has(d)) {
         return
       }
-      dependenciesBeingShutDown.add(d)
+      this.startedDependencies.delete(d)
       // shutdown a dependency and return a promise if there are others
       await d.shutdown()
       adj.deleteFromInverseAdjacencyList(d)
+      console.log("x", adj.emptyDeps)
       return Promise.all(Array.from(adj.emptyDeps).map(shutDownDep))
     }
-    this.startedDependencies = new Set()
     return Promise.all(Array.from(adj.emptyDeps).map(shutDownDep))
   }
 }

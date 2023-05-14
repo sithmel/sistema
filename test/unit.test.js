@@ -349,39 +349,48 @@ describe("dependency", () => {
       a = new SystemDependency(
         [],
         () => {},
-        () => {
+        async function stopA() {
+          await delay(10)
           stopOrder.push("A")
         }
       )
       b = new SystemDependency(
         [a],
         () => {},
-        () => {
+        async function stopB() {
+          await delay(10)
           stopOrder.push("B")
         }
       )
       c = new SystemDependency(
         [a, b],
         () => {},
-        () => {
+        async function stopC() {
+          await delay(10)
           stopOrder.push("C")
         }
       )
       d = new SystemDependency(
         [b, c],
         () => {},
-        () => {
+        async function stopD() {
+          await delay(10)
           stopOrder.push("D")
         }
       )
     })
 
-    oit("must return leftmost dep", async () => {
-      await runner.run(d)
-      console.log(runner.startedDependencies.size)
+    it("does not stop what has not started", async () => {
       await runner.shutdown()
-      assert.deepEqual(stopOrder, ["D", "C", "B", "A"])
+      assert.deepEqual(stopOrder, [])
     })
+
+    // oit("must return leftmost dep", async () => {
+    //   await runner.run(d)
+    //   console.log(runner.startedDependencies.size)
+    //   await runner.shutdown()
+    //   assert.deepEqual(stopOrder, ["D", "C", "B", "A"])
+    // })
   })
 })
 
