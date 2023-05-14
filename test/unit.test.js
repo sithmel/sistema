@@ -8,10 +8,15 @@ const { beforeEach, describe, it, oit } = require("zunit")
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 describe("dependency", () => {
+  it("sets the name", async () => {
+    const a = new Dependency("Hello")
+    assert.deepEqual(a.name, "Hello")
+  })
+
   describe("solve 4 functions graph", () => {
     let runner, a, b, c, d, counter
 
-    beforeEach(function () {
+    beforeEach(() => {
       /*
   
         A ----> B
@@ -26,19 +31,19 @@ describe("dependency", () => {
       */
       runner = new Runner()
       counter = { a: 0, b: 0, c: 0, d: 0 }
-      a = new Dependency([], () => {
+      a = new Dependency().dependsOn([]).provides(() => {
         counter.a++
         return "A"
       })
-      b = new Dependency([a], (a) => {
+      b = new Dependency().dependsOn([a]).provides((a) => {
         counter.b++
         return a + "B"
       })
-      c = new Dependency([a, b], (a, b) => {
+      c = new Dependency().dependsOn([a, b]).provides((a, b) => {
         counter.c++
         return a + b + "C"
       })
-      d = new Dependency([b, c], (b, c) => {
+      d = new Dependency().dependsOn([b, c]).provides((b, c) => {
         counter.d++
         return b + c + "D"
       })
@@ -68,7 +73,7 @@ describe("dependency", () => {
 
     it("must throw on invalid dependencies", async () => {
       try {
-        const buggy = new Dependency("invalid", () => {})
+        const buggy = new Dependency().dependsOn("invalid")
         throw new Error("on no!")
       } catch (e) {
         assert.equal(
@@ -94,7 +99,7 @@ describe("dependency", () => {
   describe("pass parameters", () => {
     let runner, a, b
 
-    beforeEach(function () {
+    beforeEach(() => {
       /*
 
         A ----> B
@@ -102,12 +107,14 @@ describe("dependency", () => {
       */
       runner = new Runner()
 
-      a = new Dependency([], () => {
+      a = new Dependency().provides(() => {
         return "Stranger"
       })
-      b = new Dependency([a, "greeting"], (a, greeting) => {
-        return greeting + " " + a
-      })
+      b = new Dependency()
+        .dependsOn([a, "greeting"])
+        .provides((a, greeting) => {
+          return greeting + " " + a
+        })
     })
 
     it("must pass the parameter", () =>
@@ -126,7 +133,7 @@ describe("dependency", () => {
   describe("fail correctly", () => {
     let runner, a, b
 
-    beforeEach(function () {
+    beforeEach(() => {
       /*
 
         A ----> B
@@ -134,10 +141,10 @@ describe("dependency", () => {
       */
       runner = new Runner()
 
-      a = new Dependency([], () => {
+      a = new Dependency().provides(() => {
         throw new Error("dependency a is broken")
       })
-      b = new Dependency([a], (a) => {
+      b = new Dependency().dependsOn([a]).provides((a) => {
         return a + "B"
       })
     })
@@ -154,10 +161,10 @@ describe("dependency", () => {
         A ----> B
       */
       const runner = new Runner()
-      const a = new Dependency([], () => {
+      const a = new Dependency().provides(() => {
         return Promise.resolve("a")
       })
-      const b = new Dependency([a], (a) => {
+      const b = new Dependency().dependsOn([a]).provides((a) => {
         return Promise.resolve(a + "b")
       })
 
@@ -168,7 +175,7 @@ describe("dependency", () => {
   describe("solve 4 functions graph with start", () => {
     let runner, a, b, c, d, counter
 
-    beforeEach(function () {
+    beforeEach(() => {
       /*
   
         A ----> B
@@ -184,19 +191,19 @@ describe("dependency", () => {
       runner = new Runner()
 
       counter = { a: 0, b: 0, c: 0, d: 0 }
-      a = new Dependency([], () => {
+      a = new Dependency().provides(() => {
         counter.a++
         return "A"
       })
-      b = new SystemDependency([a], (a) => {
+      b = new SystemDependency().dependsOn([a]).provides((a) => {
         counter.b++
         return a + "B"
       })
-      c = new SystemDependency([a, b], (a, b) => {
+      c = new SystemDependency().dependsOn([a, b]).provides((a, b) => {
         counter.c++
         return a + b + "C"
       })
-      d = new Dependency([b, c], (b, c) => {
+      d = new Dependency().dependsOn([b, c]).provides((b, c) => {
         counter.d++
         return b + c + "D"
       })
@@ -248,7 +255,7 @@ describe("dependency", () => {
     })
 
     it("must not memoize when function throw", async () => {
-      const buggy = new SystemDependency([], () => {
+      const buggy = new SystemDependency().provides(() => {
         throw new Error("broken")
       })
       try {
@@ -267,7 +274,7 @@ describe("dependency", () => {
 
       let counter = 0
 
-      const a = new Dependency(["ms"], async (ms) => {
+      const a = new Dependency().dependsOn(["ms"]).provides(async (ms) => {
         await delay(ms)
         counter++
         return "a"
@@ -292,18 +299,17 @@ describe("dependency", () => {
       let counterStart = 0
       let counterStop = 0
 
-      const a = new SystemDependency(
-        ["ms"],
-        async (ms) => {
+      const a = new SystemDependency()
+        .dependsOn(["ms"])
+        .provides(async (ms) => {
           await delay(ms)
           counterStart++
           return "a"
-        },
-        async () => {
+        })
+        .dispose(async () => {
           await delay(1)
           counterStop++
-        }
-      )
+        })
 
       runner.run(a, { ms: 10 })
       runner.run(a, { ms: 5 })
@@ -325,14 +331,9 @@ describe("dependency", () => {
   })
 
   describe("shutdown", () => {
-    let runner,
-      a,
-      b,
-      c,
-      d,
-      stopOrder = []
+    let runner, a, b, c, d, stopOrder
 
-    beforeEach(function () {
+    beforeEach(() => {
       /*
   
         A ----> B
@@ -345,39 +346,21 @@ describe("dependency", () => {
         C ----> D
   
       */
+      stopOrder = []
       runner = new Runner()
-      a = new SystemDependency(
-        [],
-        () => {},
-        async function stopA() {
-          await delay(10)
-          stopOrder.push("A")
-        }
-      )
-      b = new SystemDependency(
-        [a],
-        () => {},
-        async function stopB() {
-          await delay(10)
-          stopOrder.push("B")
-        }
-      )
-      c = new SystemDependency(
-        [a, b],
-        () => {},
-        async function stopC() {
-          await delay(10)
-          stopOrder.push("C")
-        }
-      )
-      d = new SystemDependency(
-        [b, c],
-        () => {},
-        async function stopD() {
-          await delay(10)
-          stopOrder.push("D")
-        }
-      )
+      a = new SystemDependency("A").dispose(async () => {
+        stopOrder.push("A")
+      })
+      b = new SystemDependency("B").dependsOn([a]).dispose(async () => {
+        stopOrder.push("B")
+      })
+      c = new SystemDependency("C").dependsOn([a, b]).dispose(async () => {
+        stopOrder.push("C")
+      })
+
+      d = new SystemDependency("D").dependsOn([b, c]).dispose(async () => {
+        stopOrder.push("D")
+      })
     })
 
     it("does not stop what has not started", async () => {
@@ -385,15 +368,27 @@ describe("dependency", () => {
       assert.deepEqual(stopOrder, [])
     })
 
-    // oit("must return leftmost dep", async () => {
-    //   await runner.run(d)
-    //   console.log(runner.startedDependencies.size)
-    //   await runner.shutdown()
-    //   assert.deepEqual(stopOrder, ["D", "C", "B", "A"])
-    // })
+    it("must stop entire system", async () => {
+      await runner.run(d)
+      await runner.shutdown()
+      assert.deepEqual(stopOrder, ["D", "C", "B", "A"])
+    })
+
+    it("must stop only what has started", async () => {
+      await runner.run(b)
+      await runner.shutdown()
+      assert.deepEqual(stopOrder, ["B", "A"])
+    })
+  })
+  describe("shutdown a value dependency", () => {
+    it("does not try stopping a valueDependency", async () => {
+      const runner = new Runner()
+      const a = new Dependency("A").dependsOn(["param"])
+      await runner.run(a, { param: 1 })
+      assert.deepEqual(Array.from(runner.startedDependencies), [a])
+      await runner.shutdown()
+    })
   })
 })
 
-// global shutdown
-// signal and other stuff
-// non DAC
+// test non DAC

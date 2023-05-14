@@ -1,3 +1,5 @@
+const { Dependency } = require("./dependency")
+
 /*
 This is an utility class used by the shutdown process
 It builds an adjacency list and its inverse and use it for:
@@ -12,17 +14,27 @@ class AdjacencyListUtils {
     this.emptyDeps = new Set()
 
     // build adjacencyList and initialise inverse
-    dependencies.forEach((d) => {
-      this.adjacencyList.set(d, new Set(d.deps()))
+    // this is recursive so it includes dependencies
+    // that are not included in the 'dependencies' argument
+    const addNewDep = (d) => {
+      if (this.adjacencyList.has(d)) {
+        return
+      }
+      const deps = d.deps().filter((d) => d instanceof Dependency)
+      this.adjacencyList.set(d, new Set(deps))
       this.inverseAdjacencyList.set(d, new Set())
-    })
+      deps.forEach(addNewDep)
+    }
+    dependencies.forEach(addNewDep)
+
     // complete inverseAdjacencyList
-    dependencies.forEach((d) => {
-      const deps = d.deps()
+    Array.from(this.adjacencyList.keys()).forEach((d) => {
+      const deps = this.adjacencyList.get(d)
       deps.forEach((dep) => {
         this.inverseAdjacencyList.get(dep).add(d)
       })
     })
+
     // prepare a set of empty inverse dependencies
     this.emptyDeps = new Set(
       Array.from(this.inverseAdjacencyList.entries())

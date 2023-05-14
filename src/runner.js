@@ -1,4 +1,13 @@
 const AdjacencyListUtils = require("./AdjacencyListUtils")
+const { Dependency } = require("./dependency")
+
+const TERMINATE_DEFAULTS = {
+  exitDelay: 50,
+  stopWindow: 5000,
+  onAfterTerminate: () => {},
+  onBeforeTerminate: () => {},
+  onErrorTerminate: () => {},
+}
 
 function cacheToMap(obj) {
   if (obj instanceof Map) {
@@ -16,19 +25,22 @@ function cacheToMap(obj) {
 }
 
 class Runner {
-  constructor() {
+  constructor(onTerminateOptions) {
     this.startedDependencies = new Set()
+    this.onTerminate(onTerminateOptions)
   }
 
   run(dep, cache = {}) {
     const _cache = cacheToMap(cache)
 
     const getPromiseFromDep = (dep) => {
-      this.startedDependencies.add(dep)
+      if (dep instanceof Dependency) {
+        this.startedDependencies.add(dep)
+      }
       return Promise.resolve().then(() => {
         if (!_cache.has(dep.id)) {
           const value = getPromisesFromDeps(dep.deps()).then((deps) =>
-            dep.startFunc(...deps)
+            dep.getValue(...deps)
           )
           _cache.set(dep.id, value)
         }
@@ -58,16 +70,96 @@ class Runner {
 
     const shutDownDep = async (d) => {
       if (!this.startedDependencies.has(d)) {
+        // this dep is already being stopped, return a fulfilled Promise
         return
       }
       this.startedDependencies.delete(d)
       // shutdown a dependency and return a promise if there are others
       await d.shutdown()
       adj.deleteFromInverseAdjacencyList(d)
-      console.log("x", adj.emptyDeps)
       return Promise.all(Array.from(adj.emptyDeps).map(shutDownDep))
     }
     return Promise.all(Array.from(adj.emptyDeps).map(shutDownDep))
+  }
+
+  onTerminate(options) {
+    const {
+      onAfterTerminate,
+      onBeforeTerminate,
+      onErrorTerminate,
+      customEvent,
+      handleExceptions,
+      stopWindow,
+      exitDelay,
+    } = {
+      ...TERMINATE_DEFAULTS,
+      ...options,
+    }
+
+    function shutDown(reason, code) {
+      if (code != null) {
+        process.exitCode = code
+      }
+
+      if (customEvent) {
+        process.removeListener(customEvent, stopListener)
+      }
+      process.removeListener("SIGINT", sigintListener)
+      process.removeListener("SIGTERM", sigtermListener)
+      if (handleExceptions) {
+        process.removeListener("uncaughtException", uncaughtExceptionListener)
+        process.removeListener("unhandledRejection", unhandledRejectionListener)
+      }
+
+      const timeoutFunction = timeoutMessage(
+        stopWindow,
+        `Graceful shutdown took more than stop window (${stopWindow} ms). Terminating process.`
+      )
+
+      return Promise.resolve()
+        .then(onBeforeTerminate)
+        .then(() => Promise.race([this.shutdown(reason), timeoutFunction]))
+        .then((message) => {
+          Promise.resolve()
+            .then(() => onAfterTerminate(message))
+            .then(() => exitSoon(code))
+            .catch(() => exitSoon(code))
+        })
+        .catch((err) => {
+          Promise.resolve()
+            .then(() => onErrorTerminate(err))
+            .then(() => exitSoon(1))
+            .catch(() => exitSoon(1))
+        })
+    }
+
+    function exitSoon(code) {
+      setTimeout(() => process.exit(code), exitDelay).unref()
+    }
+
+    const stopListener = (payload) =>
+      shutDown(`'${customEvent}'`, payload && payload.code)
+    const sigintListener = () => shutDown("SIGINT")
+    const sigtermListener = () => shutDown("SIGINT")
+
+    const uncaughtExceptionListener = (err) => {
+      console.error(err)
+      shutDown("uncaughtException", 1)
+    }
+    const unhandledRejectionListener = (err) => {
+      console.error(err)
+      shutDown("unhandledRejection", 1)
+    }
+
+    if (customEvent) {
+      process.once(customEvent, stopListener)
+    }
+    process.once("SIGINT", sigintListener)
+    process.once("SIGTERM", sigtermListener)
+    if (handleExceptions) {
+      process.once("uncaughtException", uncaughtExceptionListener)
+      process.once("unhandledRejection", unhandledRejectionListener)
+    }
   }
 }
 
