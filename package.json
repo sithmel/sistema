@@ -10,7 +10,9 @@
     "type": "git",
     "url": "git+https://github.com/sithmel/sistema.git"
   },
-  "keywords": ["dependency injection"],
+  "keywords": [
+    "dependency injection"
+  ],
   "author": "",
   "license": "MIT",
   "bugs": {
@@ -18,6 +20,7 @@
   },
   "homepage": "https://github.com/sithmel/sistema#readme",
   "devDependencies": {
+    "gracefully": "^2.0.0",
     "husky": "^8.0.3",
     "prettier": "^2.8.8",
     "zunit": "^4.0.2"

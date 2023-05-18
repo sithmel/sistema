@@ -3,7 +3,7 @@ const { SystemDependency, Dependency, Runner } = require("../index.js")
 const assert = require("assert")
 const { setTimeout } = require("timers")
 
-const { beforeEach, describe, it, oit } = require("zunit")
+const { beforeEach, afterEach, describe, it, oit } = require("zunit")
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -392,3 +392,6 @@ describe("dependency", () => {
 })
 
 // test non DAC
+// not possible to execute shutdown deps
+// plugins and perf
+// metadata

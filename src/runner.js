@@ -1,13 +1,6 @@
 const AdjacencyListUtils = require("./AdjacencyListUtils")
 const { Dependency } = require("./dependency")
-
-const TERMINATE_DEFAULTS = {
-  exitDelay: 50,
-  stopWindow: 5000,
-  onAfterTerminate: () => {},
-  onBeforeTerminate: () => {},
-  onErrorTerminate: () => {},
-}
+const gracefully = require("gracefully")
 
 function cacheToMap(obj) {
   if (obj instanceof Map) {
@@ -25,9 +18,8 @@ function cacheToMap(obj) {
 }
 
 class Runner {
-  constructor(onTerminateOptions) {
+  constructor() {
     this.startedDependencies = new Set()
-    this.onTerminate(onTerminateOptions)
   }
 
   run(dep, cache = {}) {
@@ -82,84 +74,8 @@ class Runner {
     return Promise.all(Array.from(adj.emptyDeps).map(shutDownDep))
   }
 
-  onTerminate(options) {
-    const {
-      onAfterTerminate,
-      onBeforeTerminate,
-      onErrorTerminate,
-      customEvent,
-      handleExceptions,
-      stopWindow,
-      exitDelay,
-    } = {
-      ...TERMINATE_DEFAULTS,
-      ...options,
-    }
-
-    function shutDown(reason, code) {
-      if (code != null) {
-        process.exitCode = code
-      }
-
-      if (customEvent) {
-        process.removeListener(customEvent, stopListener)
-      }
-      process.removeListener("SIGINT", sigintListener)
-      process.removeListener("SIGTERM", sigtermListener)
-      if (handleExceptions) {
-        process.removeListener("uncaughtException", uncaughtExceptionListener)
-        process.removeListener("unhandledRejection", unhandledRejectionListener)
-      }
-
-      const timeoutFunction = timeoutMessage(
-        stopWindow,
-        `Graceful shutdown took more than stop window (${stopWindow} ms). Terminating process.`
-      )
-
-      return Promise.resolve()
-        .then(onBeforeTerminate)
-        .then(() => Promise.race([this.shutdown(reason), timeoutFunction]))
-        .then((message) => {
-          Promise.resolve()
-            .then(() => onAfterTerminate(message))
-            .then(() => exitSoon(code))
-            .catch(() => exitSoon(code))
-        })
-        .catch((err) => {
-          Promise.resolve()
-            .then(() => onErrorTerminate(err))
-            .then(() => exitSoon(1))
-            .catch(() => exitSoon(1))
-        })
-    }
-
-    function exitSoon(code) {
-      setTimeout(() => process.exit(code), exitDelay).unref()
-    }
-
-    const stopListener = (payload) =>
-      shutDown(`'${customEvent}'`, payload && payload.code)
-    const sigintListener = () => shutDown("SIGINT")
-    const sigtermListener = () => shutDown("SIGINT")
-
-    const uncaughtExceptionListener = (err) => {
-      console.error(err)
-      shutDown("uncaughtException", 1)
-    }
-    const unhandledRejectionListener = (err) => {
-      console.error(err)
-      shutDown("unhandledRejection", 1)
-    }
-
-    if (customEvent) {
-      process.once(customEvent, stopListener)
-    }
-    process.once("SIGINT", sigintListener)
-    process.once("SIGTERM", sigtermListener)
-    if (handleExceptions) {
-      process.once("uncaughtException", uncaughtExceptionListener)
-      process.once("unhandledRejection", unhandledRejectionListener)
-    }
+  shutdownOnTerminate(options) {
+    gracefully(() => this.shutdown, options)
   }
 }
 
