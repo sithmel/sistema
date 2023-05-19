@@ -49,6 +49,15 @@ describe("dependency", () => {
       })
     })
 
+    it("returns adjacencyList", () => {
+      const adj = d.getAdjacencyList()
+      assert.equal(adj.adjacencyList.size, 4)
+      assert.deepEqual(adj.adjacencyList.get(a), new Set())
+      assert.deepEqual(adj.adjacencyList.get(b), new Set([a]))
+      assert.deepEqual(adj.adjacencyList.get(c), new Set([a, b]))
+      assert.deepEqual(adj.adjacencyList.get(d), new Set([b, c]))
+    })
+
     it("must return leftmost dep", () =>
       runner.run(a).then((dep) => assert.equal(dep, "A")))
 
@@ -389,9 +398,23 @@ describe("dependency", () => {
       await runner.shutdown()
     })
   })
+  describe("metadata", () => {
+    it("is possible to add metadata", () => {
+      const a = new Dependency("A")
+      assert.deepEqual(a.metadata, {})
+      a.addMetadata({ a: 1 })
+      assert.deepEqual(a.metadata, { a: 1 })
+      a.addMetadata({ b: 2 })
+      assert.deepEqual(a.metadata, { a: 1, b: 2 })
+    })
+  })
 })
 
-// test non DAC
-// not possible to execute shutdown deps
 // plugins and perf
-// metadata
+// documentation
+// run multiple deps
+
+// test with nest js https://github.com/manjufy/nest-hello-world/
+// test with sistema
+// test with express
+// test with sistemic

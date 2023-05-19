@@ -1,3 +1,5 @@
+const AdjacencyListUtils = require("./AdjacencyListUtils")
+
 const DEPENDENCY_ERROR =
   "A function can depend on an array of dependencies or a function returning an array of dependencies"
 
@@ -7,12 +9,23 @@ class BaseDependency {
     this.id = this
     this.getValue = () => {}
     this.name = name
+    this.metadata = {}
   }
   deps() {
     return this._deps
   }
   toString() {
     return `${this.constructor.name} ${this.name}`
+  }
+  getAllDependencies() {
+    return this._deps.filter((d) => d instanceof Dependency)
+  }
+  getAdjacencyList() {
+    return new AdjacencyListUtils([this])
+  }
+  addMetadata(meta) {
+    this.metadata = { ...this.metadata, ...meta }
+    return this
   }
 }
 

@@ -1,5 +1,3 @@
-const { Dependency } = require("./dependency")
-
 /*
 This is an utility class used by the shutdown process
 It builds an adjacency list and its inverse and use it for:
@@ -20,7 +18,7 @@ class AdjacencyListUtils {
       if (this.adjacencyList.has(d)) {
         return
       }
-      const deps = d.deps().filter((d) => d instanceof Dependency)
+      const deps = d.getAllDependencies()
       this.adjacencyList.set(d, new Set(deps))
       this.inverseAdjacencyList.set(d, new Set())
       deps.forEach(addNewDep)
