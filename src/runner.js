@@ -22,8 +22,15 @@ class Runner {
     this.startedDependencies = new Set()
   }
 
-  run(dep, cache = {}) {
-    if (dep instanceof Dependency) {
+  run(depOrArrayOfDeps, cache = {}) {
+    let dep
+    if (Array.isArray(depOrArrayOfDeps)) {
+      dep = new Dependency()
+        .dependsOn(depOrArrayOfDeps)
+        .provides((...args) => args)
+      depOrArrayOfDeps.forEach((d) => this.startedDependencies.add(d))
+    } else {
+      dep = depOrArrayOfDeps
       this.startedDependencies.add(dep)
     }
 

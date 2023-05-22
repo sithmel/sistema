@@ -158,4 +158,8 @@ class SystemDependency extends Dependency {
   }
 }
 
-module.exports = { Dependency, SystemDependency, ValueDependency }
+module.exports = {
+  Dependency,
+  SystemDependency,
+  ValueDependency,
+}

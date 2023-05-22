@@ -1,9 +1,8 @@
 const { SystemDependency, Dependency, Runner } = require("../index.js")
 
 const assert = require("assert")
-const { setTimeout } = require("timers")
 
-const { beforeEach, afterEach, describe, it, oit } = require("zunit")
+const { beforeEach, describe, it, oit } = require("zunit")
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -80,7 +79,18 @@ describe("dependency", () => {
         assert.deepEqual(res, "AB")
       }))
 
-    it("must throw on invalid dependencies", async () => {
+    it("run multiple deps", () => {
+      const e = new Dependency().provides(() => {
+        counter.e = 1
+        return "E"
+      })
+
+      return runner.run([d, e]).then((res) => {
+        assert.deepEqual(res, ["ABAABCD", "E"])
+      })
+    })
+
+    it("must throw on invalid dependencies", () => {
       try {
         const buggy = new Dependency().dependsOn("invalid")
         throw new Error("on no!")
@@ -412,7 +422,6 @@ describe("dependency", () => {
 
 // plugins and perf
 // documentation
-// run multiple deps
 
 // test with nest js https://github.com/manjufy/nest-hello-world/
 // test with sistema
