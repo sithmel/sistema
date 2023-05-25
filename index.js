@@ -1,6 +1,3 @@
-const DEPENDENCY_ERROR =
-  "A function can depend on an array of dependencies or a function returning an array of dependencies"
-
 /*
   ValueDependency is a fake dependency that is expressed as "string"
   it throws an error when executed because it should always be passed
@@ -53,20 +50,16 @@ class Dependency {
   shutdown() {
     return shutdown(this)
   }
-  dependsOn(deps) {
-    if (Array.isArray(deps)) {
-      this.edgesAndValues = deps.map((d) => {
-        if (d instanceof Dependency) {
-          return d
-        } else if (typeof d === "string") {
-          return new ValueDependency(d)
-        } else {
-          throw new Error(DEPENDENCY_ERROR)
-        }
-      })
-    } else {
-      throw new Error(DEPENDENCY_ERROR)
-    }
+  dependsOn(...deps) {
+    this.edgesAndValues = deps.map((d) => {
+      if (d instanceof Dependency) {
+        return d
+      } else if (typeof d === "string") {
+        return new ValueDependency(d)
+      } else {
+        throw new Error("A function can depend on a dependency or a string")
+      }
+    })
     this.edgesAndValues
       .filter((d) => d instanceof Dependency)
       .forEach((d) => {

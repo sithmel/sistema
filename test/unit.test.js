@@ -30,19 +30,19 @@ describe("dependency", () => {
       */
       runner = new Runner()
       counter = { a: 0, b: 0, c: 0, d: 0 }
-      a = new Dependency().dependsOn([]).provides(() => {
+      a = new Dependency().provides(() => {
         counter.a++
         return "A"
       })
-      b = new Dependency().dependsOn([a]).provides((a) => {
+      b = new Dependency().dependsOn(a).provides((a) => {
         counter.b++
         return a + "B"
       })
-      c = new Dependency().dependsOn([a, b]).provides((a, b) => {
+      c = new Dependency().dependsOn(a, b).provides((a, b) => {
         counter.c++
         return a + b + "C"
       })
-      d = new Dependency().dependsOn([b, c]).provides((b, c) => {
+      d = new Dependency().dependsOn(b, c).provides((b, c) => {
         counter.d++
         return b + c + "D"
       })
@@ -93,18 +93,6 @@ describe("dependency", () => {
       })
     })
 
-    it("must throw on invalid dependencies", () => {
-      try {
-        const buggy = new Dependency().dependsOn("invalid")
-        throw new Error("on no!")
-      } catch (e) {
-        assert.equal(
-          e.message,
-          "A function can depend on an array of dependencies or a function returning an array of dependencies"
-        )
-      }
-    })
-
     it("must throw on invalid cache", async () => {
       try {
         await runner.run(d, "invalid cache")
@@ -131,11 +119,9 @@ describe("dependency", () => {
       a = new Dependency().provides(() => {
         return "Stranger"
       })
-      b = new Dependency()
-        .dependsOn([a, "greeting"])
-        .provides((a, greeting) => {
-          return greeting + " " + a
-        })
+      b = new Dependency().dependsOn(a, "greeting").provides((a, greeting) => {
+        return greeting + " " + a
+      })
     })
 
     it("must pass the parameter", () =>
@@ -164,7 +150,7 @@ describe("dependency", () => {
       a = new Dependency().provides(() => {
         throw new Error("dependency a is broken")
       })
-      b = new Dependency().dependsOn([a]).provides((a) => {
+      b = new Dependency().dependsOn(a).provides((a) => {
         return a + "B"
       })
     })
@@ -183,7 +169,7 @@ describe("dependency", () => {
       const a = new Dependency().provides(() => {
         return Promise.resolve("a")
       })
-      const b = new Dependency().dependsOn([a]).provides((a) => {
+      const b = new Dependency().dependsOn(a).provides((a) => {
         return Promise.resolve(a + "b")
       })
       runner = new Runner()
@@ -214,15 +200,15 @@ describe("dependency", () => {
         counter.a++
         return "A"
       })
-      b = new SystemDependency().dependsOn([a]).provides((a) => {
+      b = new SystemDependency().dependsOn(a).provides((a) => {
         counter.b++
         return a + "B"
       })
-      c = new SystemDependency().dependsOn([a, b]).provides((a, b) => {
+      c = new SystemDependency().dependsOn(a, b).provides((a, b) => {
         counter.c++
         return a + b + "C"
       })
-      d = new Dependency().dependsOn([b, c]).provides((b, c) => {
+      d = new Dependency().dependsOn(b, c).provides((b, c) => {
         counter.d++
         return b + c + "D"
       })
@@ -289,7 +275,7 @@ describe("dependency", () => {
 
   describe("must shutdown", () => {
     it("must stop a Dependency", async () => {
-      const a = new Dependency().dependsOn(["ms"]).provides(async (ms) => {
+      const a = new Dependency().dependsOn("ms").provides(async (ms) => {
         await delay(ms)
         return "a"
       })
@@ -304,7 +290,7 @@ describe("dependency", () => {
     it("must stop a SystemDependency", async () => {
       let counterStop = 0
 
-      const a = new SystemDependency().dependsOn(["ms"]).dispose(async () => {
+      const a = new SystemDependency().dependsOn("ms").dispose(async () => {
         await delay(1)
         counterStop++
       })
@@ -347,14 +333,14 @@ describe("dependency", () => {
       a = new SystemDependency("A").dispose(async () => {
         stopOrder.push("A")
       })
-      b = new SystemDependency("B").dependsOn([a]).dispose(async () => {
+      b = new SystemDependency("B").dependsOn(a).dispose(async () => {
         stopOrder.push("B")
       })
-      c = new SystemDependency("C").dependsOn([a, b]).dispose(async () => {
+      c = new SystemDependency("C").dependsOn(a, b).dispose(async () => {
         stopOrder.push("C")
       })
 
-      d = new SystemDependency("D").dependsOn([b, c]).dispose(async () => {
+      d = new SystemDependency("D").dependsOn(b, c).dispose(async () => {
         stopOrder.push("D")
       })
     })
