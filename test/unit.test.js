@@ -1,4 +1,4 @@
-const { SystemDependency, Dependency, run, shutdown } = require("../index.js")
+const { SystemDependency, Dependency, Runner } = require("../index.js")
 
 const assert = require("assert")
 
@@ -13,7 +13,7 @@ describe("dependency", () => {
   })
 
   describe("solve 4 functions graph", () => {
-    let a, b, c, d, counter
+    let a, b, c, d, counter, runner
 
     beforeEach(() => {
       /*
@@ -28,6 +28,7 @@ describe("dependency", () => {
         C ----> D
   
       */
+      runner = new Runner()
       counter = { a: 0, b: 0, c: 0, d: 0 }
       a = new Dependency().dependsOn([]).provides(() => {
         counter.a++
@@ -47,25 +48,37 @@ describe("dependency", () => {
       })
     })
 
+    it("must save edges", () => {
+      assert.deepEqual(a.edgesAndValues, [])
+      assert.deepEqual(b.edgesAndValues, [a])
+      assert.deepEqual(c.edgesAndValues, [a, b])
+      assert.deepEqual(d.edgesAndValues, [b, c])
+
+      assert.deepEqual(a.inverseEdges, new Set([b, c]))
+      assert.deepEqual(b.inverseEdges, new Set([c, d]))
+      assert.deepEqual(c.inverseEdges, new Set([d]))
+      assert.deepEqual(d.inverseEdges, new Set([]))
+    })
+
     it("must return leftmost dep", () =>
-      a.run().then((dep) => assert.equal(dep, "A")))
+      runner.run(a).then((dep) => assert.equal(dep, "A")))
 
     it("must return middle dep", () =>
-      b.run().then((dep) => assert.equal(dep, "AB")))
+      runner.run(b).then((dep) => assert.equal(dep, "AB")))
 
     it("must return middle dep (2)", () =>
-      c.run().then((dep) => assert.equal(dep, "AABC")))
+      runner.run(c).then((dep) => assert.equal(dep, "AABC")))
 
     it("must return rightmost dep", () =>
-      d.run().then((dep) => assert.equal(dep, "ABAABCD")))
+      runner.run(d).then((dep) => assert.equal(dep, "ABAABCD")))
 
     it("must execute dep only once", () =>
-      d
-        .run()
+      runner
+        .run(d)
         .then((_dep) => assert.deepEqual(counter, { a: 1, b: 1, c: 1, d: 1 })))
 
     it("run single", () =>
-      b.run().then((res) => {
+      runner.run(b).then((res) => {
         assert.deepEqual(res, "AB")
       }))
 
@@ -75,7 +88,7 @@ describe("dependency", () => {
         return "E"
       })
 
-      return run([d, e]).then((res) => {
+      return runner.run([d, e]).then((res) => {
         assert.deepEqual(res, ["ABAABCD", "E"])
       })
     })
@@ -94,7 +107,7 @@ describe("dependency", () => {
 
     it("must throw on invalid cache", async () => {
       try {
-        await d.run("invalid cache")
+        await runner.run(d, "invalid cache")
         throw new Error("on no!")
       } catch (e) {
         assert.equal(
@@ -106,7 +119,7 @@ describe("dependency", () => {
   })
 
   describe("pass parameters", () => {
-    let a, b
+    let a, b, runner
 
     beforeEach(() => {
       /*
@@ -114,6 +127,7 @@ describe("dependency", () => {
         A ----> B
 
       */
+      runner = new Runner()
       a = new Dependency().provides(() => {
         return "Stranger"
       })
@@ -125,20 +139,20 @@ describe("dependency", () => {
     })
 
     it("must pass the parameter", () =>
-      b
-        .run({ greeting: "hello" })
+      runner
+        .run(b, { greeting: "hello" })
         .then((dep) => assert.equal(dep, "hello Stranger")))
 
     it("must fail omitting the parameter", () =>
-      b
-        .run()
+      runner
+        .run(b)
         .catch((err) =>
           assert.equal(err.message, "Missing argument: greeting")
         ))
   })
 
   describe("fail correctly", () => {
-    let a, b
+    let a, b, runner
 
     beforeEach(() => {
       /*
@@ -146,6 +160,7 @@ describe("dependency", () => {
         A ----> B
 
       */
+      runner = new Runner()
       a = new Dependency().provides(() => {
         throw new Error("dependency a is broken")
       })
@@ -155,8 +170,8 @@ describe("dependency", () => {
     })
 
     it("must stop dep execution when a dependency throws", () =>
-      b
-        .run()
+      runner
+        .run(b)
         .catch((err) => assert.equal(err.message, "dependency a is broken")))
   })
 
@@ -171,13 +186,14 @@ describe("dependency", () => {
       const b = new Dependency().dependsOn([a]).provides((a) => {
         return Promise.resolve(a + "b")
       })
+      runner = new Runner()
 
-      return b.run().then((dep) => assert.equal(dep, "ab"))
+      return runner.run(b).then((dep) => assert.equal(dep, "ab"))
     })
   })
 
   describe("solve 4 functions graph with start", () => {
-    let a, b, c, d, counter
+    let a, b, c, d, counter, runner
 
     beforeEach(() => {
       /*
@@ -192,6 +208,7 @@ describe("dependency", () => {
         C ----> D
   
       */
+      runner = new Runner()
       counter = { a: 0, b: 0, c: 0, d: 0 }
       a = new Dependency().provides(() => {
         counter.a++
@@ -212,42 +229,42 @@ describe("dependency", () => {
     })
 
     it("must return leftmost dep", () =>
-      a.run().then((dep) => assert.equal(dep, "A")))
+      runner.run(a).then((dep) => assert.equal(dep, "A")))
 
     it("must return middle dep", () =>
-      b.run().then((dep) => assert.equal(dep, "AB")))
+      runner.run(b).then((dep) => assert.equal(dep, "AB")))
 
     it("must return middle dep (2)", () =>
-      c.run().then((dep) => assert.equal(dep, "AABC")))
+      runner.run(c).then((dep) => assert.equal(dep, "AABC")))
 
     it("must return rightmost dep", () =>
-      d.run().then((dep) => assert.equal(dep, "ABAABCD")))
+      runner.run(d).then((dep) => assert.equal(dep, "ABAABCD")))
 
     it("must execute dep only once", () =>
-      d
-        .run()
+      runner
+        .run(d)
         .then((dep) => assert.deepEqual(counter, { a: 1, b: 1, c: 1, d: 1 })))
 
     it("must return rightmost dep (and memoize)", async () => {
-      const dep = await d.run()
+      const dep = await runner.run(d)
       assert.equal(dep, "ABAABCD")
       assert.deepEqual(counter, { a: 1, b: 1, c: 1, d: 1 })
 
       counter = { a: 0, b: 0, c: 0, d: 0 }
-      const dep2 = await d.run()
+      const dep2 = await runner.run(d)
       assert.equal(dep2, "ABAABCD")
       assert.deepEqual(counter, { a: 0, b: 0, c: 0, d: 1 })
 
-      await d.shutdown()
+      await runner.shutdown()
       counter = { a: 0, b: 0, c: 0, d: 0 }
 
-      const dep3 = await run(d)
+      const dep3 = await runner.run(d)
       assert.equal(dep3, "ABAABCD")
       assert.deepEqual(counter, { a: 1, b: 1, c: 1, d: 1 })
     })
 
     it("must return rightmost dep (and memoize), calling them at the same time", async () => {
-      const [dep, dep2] = await Promise.all([run(d), run(d)])
+      const [dep, dep2] = await Promise.all([runner.run(d), runner.run(d)])
       assert.equal(dep, "ABAABCD")
       assert.equal(dep2, "ABAABCD")
       // I don't think "a" should be called twice here
@@ -261,7 +278,7 @@ describe("dependency", () => {
         throw new Error("broken")
       })
       try {
-        await run(buggy)
+        await runner.run(buggy)
         throw new Error("on no!")
       } catch (e) {
         assert.equal(e.message, "broken")
@@ -276,9 +293,10 @@ describe("dependency", () => {
         await delay(ms)
         return "a"
       })
-      a.run({ ms: 1 })
+      const runner = new Runner()
+      runner.run(a, { ms: 1 })
       await delay(1)
-      return a.run({ ms: 1 }).catch((e) => {
+      return runner.run(a, { ms: 1 }).catch((e) => {
         assert.equal(e.message, "Shutting down")
       })
     })
@@ -291,13 +309,14 @@ describe("dependency", () => {
         counterStop++
       })
 
-      a.run({ ms: 8 })
+      const runner = new Runner()
+      runner.run(a, { ms: 8 })
 
       await delay(1)
 
       const shutdownPromise = a._shutdown()
 
-      await a.run({ ms: 1 }).catch((e) => {
+      await runner.run(a, { ms: 1 }).catch((e) => {
         assert.equal(e.message, "Shutting down")
       })
 
@@ -308,7 +327,7 @@ describe("dependency", () => {
   })
 
   describe("shutdown", () => {
-    let a, b, c, d, stopOrder
+    let a, b, c, d, stopOrder, runner
 
     beforeEach(() => {
       /*
@@ -323,6 +342,7 @@ describe("dependency", () => {
         C ----> D
   
       */
+      runner = new Runner()
       stopOrder = []
       a = new SystemDependency("A").dispose(async () => {
         stopOrder.push("A")
@@ -340,25 +360,27 @@ describe("dependency", () => {
     })
 
     it("does not stop what has not started", async () => {
-      await shutdown(d)
+      await runner.shutdown()
       assert.deepEqual(stopOrder, [])
     })
 
     it("must stop entire system", async () => {
-      await d.run()
-      await d.shutdown()
-      assert.deepEqual(stopOrder, ["D", "B", "C", "A"])
+      await runner.run(d)
+      await runner.shutdown()
+      assert.deepEqual(stopOrder, ["D", "C", "B", "A"])
     })
 
     it("must stop only what has started", async () => {
-      await b.run()
-      await d.shutdown()
+      await runner.run(b)
+      await runner.shutdown()
       assert.deepEqual(stopOrder, ["B", "A"])
     })
   })
 })
 
+// dependOn takes a list not an array
 // plugins and perf
+
 // documentation
 
 // test with nest js https://github.com/manjufy/nest-hello-world/

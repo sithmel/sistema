@@ -1,46 +1,20 @@
 const DEPENDENCY_ERROR =
   "A function can depend on an array of dependencies or a function returning an array of dependencies"
 
-class Executable {
-  constructor(name) {
-    this._deps = []
-    this.id = this
-    this.name = name
-    this._func = () => {}
-  }
-  deps() {
-    return this._deps
-  }
-  getValue(...args) {
-    return Promise.resolve().then(() => this._func(...args))
-  }
-  toString() {
-    return `${this.constructor.name} ${this.name}`
-  }
-  getAllDependencies() {
-    return this._deps.filter((d) => d instanceof Dependency)
-  }
-
-  run(cache = {}) {
-    return run(this, cache)
-  }
-  shutdown() {
-    return shutdown(this)
-  }
-}
-
 /*
-  Value dependency is a fake dependency that is expressed as "string"
+  ValueDependency is a fake dependency that is expressed as "string"
   it throws an error when executed because it should always be passed
   as parameter in the runner
 */
-class ValueDependency extends Executable {
+class ValueDependency {
   constructor(name) {
-    super(name)
     this.id = name
-    this._func = () => {
-      throw new Error(`Missing argument: ${name}`)
-    }
+  }
+  getValue() {
+    throw new Error(`Missing argument: ${this.id}`)
+  }
+  deps() {
+    return []
   }
 }
 
@@ -49,10 +23,39 @@ class ValueDependency extends Executable {
   - dependencies that needs to be executed before in order to execute this
   - a way to shut down this function: disable its execution and ensure is no longer running
 */
-class Dependency extends Executable {
+class Dependency {
+  constructor(name) {
+    this.edgesAndValues = []
+    this.inverseEdges = new Set()
+
+    this.id = this
+    this.name = name
+    this._func = () => {}
+  }
+  deps() {
+    return this.edgesAndValues
+  }
+  getValue(...args) {
+    return Promise.resolve().then(() => this._func(...args))
+  }
+  toString() {
+    return `${this.constructor.name} ${this.name}`
+  }
+  getEdges() {
+    return this.edgesAndValues.filter((d) => d instanceof Dependency)
+  }
+  getInverseEdges() {
+    return Array.from(this.inverseEdges)
+  }
+  run(cache = {}) {
+    return run(this, cache)
+  }
+  shutdown() {
+    return shutdown(this)
+  }
   dependsOn(deps) {
     if (Array.isArray(deps)) {
-      this._deps = deps.map((d) => {
+      this.edgesAndValues = deps.map((d) => {
         if (d instanceof Dependency) {
           return d
         } else if (typeof d === "string") {
@@ -64,6 +67,11 @@ class Dependency extends Executable {
     } else {
       throw new Error(DEPENDENCY_ERROR)
     }
+    this.edgesAndValues
+      .filter((d) => d instanceof Dependency)
+      .forEach((d) => {
+        d.inverseEdges.add(this)
+      })
     return this
   }
 
@@ -143,53 +151,64 @@ function cacheToMap(obj) {
   )
 }
 
-function run(dep, cache = {}) {
-  if (Array.isArray(dep)) {
-    const newdep = new Dependency().dependsOn(dep).provides((...args) => args)
-    return run(newdep, cache)
+class Runner {
+  constructor() {
+    this.startedDependencies = new Set()
   }
 
-  const _cache = cacheToMap(cache)
+  run(dep, cache = {}) {
+    const areMultiDeps = Array.isArray(dep)
+    dep = areMultiDeps ? dep : [dep]
 
-  const getPromiseFromDep = (dep) => {
-    return Promise.resolve().then(() => {
-      if (!_cache.has(dep.id)) {
-        const value = getPromisesFromDeps(dep.deps()).then((deps) =>
-          dep.getValue(...deps)
-        )
-        _cache.set(dep.id, value)
+    const _cache = cacheToMap(cache)
+
+    const getPromiseFromDep = (dep) => {
+      if (dep instanceof Dependency) {
+        this.startedDependencies.add(dep)
       }
-      return _cache.get(dep.id)
-    })
-  }
-  const getPromisesFromDeps = (deps) => Promise.all(deps.map(getPromiseFromDep))
-
-  return getPromiseFromDep(dep)
-}
-
-function shutdown(dep) {
-  if (Array.isArray(dep)) {
-    const newdep = new Dependency().dependsOn(dep)
-    return shutdown(newdep)
-  }
-
-  const alreadyShutdown = new Set()
-  const shut = async (d) => {
-    if (alreadyShutdown.has(d)) {
-      return
+      return Promise.resolve().then(() => {
+        if (!_cache.has(dep.id)) {
+          const value = getPromisesFromDeps(dep.deps()).then((deps) =>
+            dep.getValue(...deps)
+          )
+          _cache.set(dep.id, value)
+        }
+        return _cache.get(dep.id)
+      })
     }
-    try {
-      alreadyShutdown.add(d)
-      await d._shutdown()
-    } catch (e) {}
-    return Promise.all(d.getAllDependencies().map(shut))
+    const getPromisesFromDeps = (deps) =>
+      Promise.all(deps.map(getPromiseFromDep))
+
+    return getPromisesFromDeps(dep).then((deps) =>
+      areMultiDeps ? deps : deps[0]
+    )
   }
-  return shut(dep)
+
+  shutdown() {
+    if (this.startedDependencies.size === 0) {
+      return Promise.resolve()
+    }
+
+    const shutDownDep = async (d) => {
+      // this dep is already being stopped, return its Promise
+      if (!this.startedDependencies.has(d)) {
+        return
+      }
+      this.startedDependencies.delete(d)
+      await shutDownDeps(d.getInverseEdges())
+      d._shutdown()
+    }
+
+    const shutDownDeps = (deps) => Promise.all(deps.map(shutDownDep))
+
+    return shutDownDep(Array.from(this.startedDependencies)[0]).then(() =>
+      this.shutdown()
+    )
+  }
 }
 
 module.exports = {
   Dependency,
   SystemDependency,
-  run,
-  shutdown,
+  Runner,
 }
