@@ -188,11 +188,9 @@ class Runner {
         return
       }
       this.startedDependencies.delete(d)
-      await shutDownDeps(d.getInverseEdges())
-      d._shutdown()
+      await Promise.all(d.getInverseEdges().map(shutDownDep))
+      return d._shutdown()
     }
-
-    const shutDownDeps = (deps) => Promise.all(deps.map(shutDownDep))
 
     return shutDownDep(Array.from(this.startedDependencies)[0]).then(() =>
       this.shutdown()
