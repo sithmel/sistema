@@ -150,9 +150,6 @@ class Runner {
   }
 
   run(dep, cache = {}) {
-    const areMultiDeps = Array.isArray(dep)
-    dep = areMultiDeps ? dep : [dep]
-
     const _cache = cacheToMap(cache)
 
     const getPromiseFromDep = (dep) => {
@@ -172,9 +169,9 @@ class Runner {
     const getPromisesFromDeps = (deps) =>
       Promise.all(deps.map(getPromiseFromDep))
 
-    return getPromisesFromDeps(dep).then((deps) =>
-      areMultiDeps ? deps : deps[0]
-    )
+    return Array.isArray(dep)
+      ? getPromisesFromDeps(dep)
+      : getPromiseFromDeps(dep)
   }
 
   shutdown() {
@@ -183,7 +180,6 @@ class Runner {
     }
 
     const shutDownDep = async (d) => {
-      // this dep is already being stopped, return its Promise
       if (!this.startedDependencies.has(d)) {
         return
       }

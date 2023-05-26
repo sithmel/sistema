@@ -363,13 +363,3 @@ describe("dependency", () => {
     })
   })
 })
-
-// dependOn takes a list not an array
-// plugins and perf
-
-// documentation
-
-// test with nest js https://github.com/manjufy/nest-hello-world/
-// test with sistema
-// test with express
-// test with sistemic
