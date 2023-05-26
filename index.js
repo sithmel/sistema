@@ -171,7 +171,7 @@ class Runner {
 
     return Array.isArray(dep)
       ? getPromisesFromDeps(dep)
-      : getPromiseFromDeps(dep)
+      : getPromiseFromDep(dep)
   }
 
   shutdown() {
