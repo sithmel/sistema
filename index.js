@@ -1,7 +1,7 @@
 /*
   ValueDependency is a fake dependency that is expressed as "string"
   it throws an error when executed because it should always be passed
-  as parameter in the runner
+  as parameter
 */
 class ValueDependency {
   constructor(name) {
@@ -28,6 +28,7 @@ class Dependency {
     this.id = this
     this.name = name
     this._func = () => {}
+    this.contextItems = new Set()
   }
   deps() {
     return this.edgesAndValues
@@ -44,11 +45,8 @@ class Dependency {
   getInverseEdges() {
     return Array.from(this.inverseEdges)
   }
-  run(cache = {}) {
-    return run(this, cache)
-  }
-  shutdown() {
-    return shutdown(this)
+  run(cache = {}, context) {
+    return run(this, cache, context)
   }
   dependsOn(...deps) {
     this.edgesAndValues = deps.map((d) => {
@@ -109,12 +107,11 @@ class SystemDependency extends Dependency {
     return this
   }
 
-  deps() {
-    if (this.isMemoized) return []
-    return super.deps()
-  }
-
   _shutdown() {
+    if (this.contextItems.size !== 0) {
+      return Promise.resolve()
+    }
+
     if (!this.isMemoized) {
       return super._shutdown()
     }
@@ -144,58 +141,70 @@ function cacheToMap(obj) {
   )
 }
 
-class Runner {
+class Context {
   constructor() {
     this.startedDependencies = new Set()
   }
-
-  run(dep, cache = {}) {
-    const _cache = cacheToMap(cache)
-
-    const getPromiseFromDep = (dep) => {
-      if (dep instanceof Dependency) {
-        this.startedDependencies.add(dep)
-      }
-      return Promise.resolve().then(() => {
-        if (!_cache.has(dep.id)) {
-          const value = getPromisesFromDeps(dep.deps()).then((deps) =>
-            dep.getValue(...deps)
-          )
-          _cache.set(dep.id, value)
-        }
-        return _cache.get(dep.id)
-      })
-    }
-    const getPromisesFromDeps = (deps) =>
-      Promise.all(deps.map(getPromiseFromDep))
-
-    return Array.isArray(dep)
-      ? getPromisesFromDeps(dep)
-      : getPromiseFromDep(dep)
+  add(dep) {
+    this.startedDependencies.add(dep)
+    dep.contextItems.add(this)
   }
-
+  remove(dep) {
+    this.startedDependencies.delete(dep)
+    dep.contextItems.delete(this)
+  }
+  has(dep) {
+    return this.startedDependencies.has(dep)
+  }
+  size() {
+    return this.startedDependencies.size
+  }
+  getFirst() {
+    return Array.from(this.startedDependencies)[0]
+  }
   shutdown() {
-    if (this.startedDependencies.size === 0) {
+    if (this.size() === 0) {
       return Promise.resolve()
     }
 
     const shutDownDep = async (d) => {
-      if (!this.startedDependencies.has(d)) {
+      if (!this.has(d)) {
         return
       }
-      this.startedDependencies.delete(d)
+      this.remove(d)
       await Promise.all(d.getInverseEdges().map(shutDownDep))
       return d._shutdown()
     }
 
-    return shutDownDep(Array.from(this.startedDependencies)[0]).then(() =>
-      this.shutdown()
-    )
+    return shutDownDep(this.getFirst()).then(() => this.shutdown())
   }
+}
+
+function run(dep, cache = {}, context) {
+  const _cache = cacheToMap(cache)
+
+  const getPromiseFromDep = (dep) => {
+    if (context != null && dep instanceof Dependency) {
+      context.add(dep)
+    }
+    return Promise.resolve().then(() => {
+      if (!_cache.has(dep.id)) {
+        const value = getPromisesFromDeps(dep.deps()).then((deps) =>
+          dep.getValue(...deps)
+        )
+        _cache.set(dep.id, value)
+      }
+      return _cache.get(dep.id)
+    })
+  }
+  const getPromisesFromDeps = (deps) => Promise.all(deps.map(getPromiseFromDep))
+
+  return Array.isArray(dep) ? getPromisesFromDeps(dep) : getPromiseFromDep(dep)
 }
 
 module.exports = {
   Dependency,
   SystemDependency,
-  Runner,
+  Context,
+  run,
 }
