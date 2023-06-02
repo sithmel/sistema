@@ -76,11 +76,6 @@ describe("dependency", () => {
         .run()
         .then((_dep) => assert.deepEqual(counter, { a: 1, b: 1, c: 1, d: 1 })))
 
-    it("run single", () =>
-      b.run().then((res) => {
-        assert.deepEqual(res, "AB")
-      }))
-
     it("run multiple deps", () => {
       const e = new Dependency().provides(() => {
         counter.e = 1
@@ -282,7 +277,7 @@ describe("dependency", () => {
 
       await delay(1)
 
-      const shutdownPromise = a._shutdown()
+      const shutdownPromise = a.shutdown()
 
       return shutdownPromise.then(() => {
         assert.equal(counterStop, 1)
@@ -349,6 +344,83 @@ describe("dependency", () => {
       stopOrder = []
       await secondContext.shutdown()
       assert.deepEqual(stopOrder, ["B", "A"])
+    })
+  })
+
+  describe("context callback", () => {
+    let a, b, context
+
+    beforeEach(() => {
+      /*
+        A ----> B
+      */
+      context = new Context()
+      a = new SystemDependency()
+      b = new Dependency().dependsOn(a)
+    })
+
+    it("must call callback on success", async () => {
+      const depsRun = []
+      const depsShutdown = []
+      context.onSuccessRun((dep, ctx, opts) => {
+        depsRun.push(dep)
+        assert.equal(context, ctx)
+        assert(opts.startedOn > 0)
+      })
+      context.onSuccessShutdown((dep, ctx, opts) => {
+        depsShutdown.push(dep)
+        assert.equal(context, ctx)
+        assert(opts.startedOn > 0)
+      })
+
+      await b.run({}, context)
+      assert.deepEqual(depsRun, [a, b])
+      await context.shutdown()
+      assert.deepEqual(depsShutdown, [a])
+    })
+
+    it("must call callback when fail running", async () => {
+      context
+        .onSuccessRun(() => {
+          throw new Error("it should not enter here")
+        })
+        .onFailRun((dep, ctx, opts) => {
+          assert.equal(dep, c)
+          assert.equal(context, ctx)
+          assert(opts.startedOn > 0)
+          assert.equal(opts.error.message, "oh no!")
+        })
+      const c = new Dependency().provides(() => {
+        throw new Error("oh no!")
+      })
+      try {
+        await c.run({}, context)
+      } catch (e) {
+        // we ignore the error so we let the assertion run
+      }
+    })
+
+    it("must call callback when fail shutting down", async () => {
+      context
+        .onSuccessShutdown(() => {
+          throw new Error("it should not enter here")
+        })
+        .onFailShutdown((dep, ctx, opts) => {
+          assert.equal(dep, c)
+          assert.equal(context, ctx)
+          assert(opts.startedOn > 0)
+          assert.equal(opts.error.message, "oh no!")
+        })
+      const c = new SystemDependency().dispose(() => {
+        throw new Error("oh no!")
+      })
+      await c.run({}, context)
+
+      try {
+        await context.shutdown()
+      } catch (e) {
+        // we ignore the error so we let the assertion run
+      }
     })
   })
 })

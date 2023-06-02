@@ -1,3 +1,5 @@
+const { performance } = require("perf_hooks")
+
 /*
   ValueDependency is a fake dependency that is expressed as "string"
   it throws an error when executed because it should always be passed
@@ -71,8 +73,9 @@ class Dependency {
     return this
   }
 
-  _shutdown() {
-    return Promise.resolve()
+  shutdown() {
+    // this returns true if a shutdown happens
+    return Promise.resolve(false)
   }
 }
 
@@ -107,17 +110,19 @@ class SystemDependency extends Dependency {
     return this
   }
 
-  _shutdown() {
+  shutdown() {
     if (this.contextItems.size !== 0) {
-      return Promise.resolve()
+      return Promise.resolve(false)
     }
 
     if (!this.isMemoized) {
-      return super._shutdown()
+      return Promise.resolve(false)
     }
 
     this._reset()
-    return super._shutdown().then(this.stopFunc)
+    return Promise.resolve()
+      .then(this.stopFunc)
+      .then(() => true)
   }
 
   _reset() {
@@ -141,9 +146,37 @@ function cacheToMap(obj) {
   )
 }
 
-class Context {
+class NoContext {
   constructor() {
+    this.name = undefined
+    this.successRun = () => {}
+    this.failRun = () => {}
+    this.successShutdown = () => {}
+    this.failShutdown = () => {}
+  }
+  add() {}
+}
+class Context extends NoContext {
+  constructor(name) {
+    super()
+    this.name = name
     this.startedDependencies = new Set()
+  }
+  onSuccessRun(func) {
+    this.successRun = func
+    return this
+  }
+  onFailRun(func) {
+    this.failRun = func
+    return this
+  }
+  onSuccessShutdown(func) {
+    this.successShutdown = func
+    return this
+  }
+  onFailShutdown(func) {
+    this.failShutdown = func
+    return this
   }
   add(dep) {
     this.startedDependencies.add(dep)
@@ -173,26 +206,41 @@ class Context {
       }
       this.remove(d)
       await Promise.all(d.getInverseEdges().map(shutDownDep))
-      return d._shutdown()
+      const startedOn = performance.now()
+      const shutdownPromise = d.shutdown()
+      shutdownPromise
+        .then(
+          (hasShutdown) =>
+            hasShutdown && this.successShutdown(d, this, { startedOn })
+        )
+        .catch((error) => this.failShutdown(d, this, { error, startedOn }))
+      return shutdownPromise
     }
 
     return shutDownDep(this.getFirst()).then(() => this.shutdown())
   }
 }
 
-function run(dep, cache = {}, context) {
+function run(dep, cache = {}, context = new NoContext()) {
   const _cache = cacheToMap(cache)
 
   const getPromiseFromDep = (dep) => {
-    if (context != null && dep instanceof Dependency) {
+    if (dep instanceof Dependency) {
       context.add(dep)
     }
     return Promise.resolve().then(() => {
       if (!_cache.has(dep.id)) {
-        const value = getPromisesFromDeps(dep.deps()).then((deps) =>
-          dep.getValue(...deps)
-        )
-        _cache.set(dep.id, value)
+        let startedOn
+        const valuePromise = getPromisesFromDeps(dep.deps()).then((deps) => {
+          startedOn = performance.now()
+          return dep.getValue(...deps)
+        })
+        valuePromise
+          .then(() => context.successRun(dep, context, { startedOn }))
+          .catch((error) => {
+            context.failRun(dep, context, { error, startedOn })
+          })
+        _cache.set(dep.id, valuePromise)
       }
       return _cache.get(dep.id)
     })
