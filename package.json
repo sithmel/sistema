@@ -3,7 +3,6 @@
   "version": "0.0.0",
   "description": "Dependency injection library",
   "main": "index.js",
-  "types": "types/index.d.ts",
   "scripts": {
     "test": "zUnit",
     "types": "tsc"
