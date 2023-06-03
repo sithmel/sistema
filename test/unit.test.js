@@ -259,7 +259,7 @@ describe("dependency", () => {
         throw new Error("on no!")
       } catch (e) {
         assert.equal(e.message, "broken")
-        assert.equal(buggy.isMemoized, false)
+        assert.equal(buggy.memo, undefined)
       }
     })
   })

@@ -1,4 +1,4 @@
-const { performance } = require("perf_hooks")
+//@ts-check
 
 /*
   ValueDependency is a fake dependency that is expressed as "string"
@@ -6,12 +6,18 @@ const { performance } = require("perf_hooks")
   as parameter
 */
 class ValueDependency {
+  /**
+   * @param {string} name
+   */
   constructor(name) {
     this.id = name
   }
   getValue() {
     throw new Error(`Missing argument: ${this.id}`)
   }
+  /**
+   * @return {Array<Dependency|ValueDependency>} name
+   */
   deps() {
     return []
   }
@@ -23,33 +29,62 @@ class ValueDependency {
   - a way to shut down this function: disable its execution and ensure is no longer running
 */
 class Dependency {
+  /**
+   * @param {?string} name
+   */
   constructor(name) {
     this.edgesAndValues = []
     this.inverseEdges = new Set()
 
     this.id = this
     this.name = name
-    this._func = () => {}
+    this._func = (...args) => {}
     this.contextItems = new Set()
   }
+  /**
+   * @return {Array<Dependency|ValueDependency>} name
+   */
   deps() {
     return this.edgesAndValues
   }
+  /**
+   * @param {any[]} args
+   * @return {Promise}
+   */
   getValue(...args) {
     return Promise.resolve().then(() => this._func(...args))
   }
+  /**
+   * @return {string}
+   */
   toString() {
     return `${this.constructor.name} ${this.name}`
   }
+  /**
+   * @return {Array<Dependency>}
+   */
   getEdges() {
     return this.edgesAndValues.filter((d) => d instanceof Dependency)
   }
+  /**
+   * @return {Array<Dependency>}
+   */
   getInverseEdges() {
     return Array.from(this.inverseEdges)
   }
+  /**
+   * @param {Object} cache
+   * @param {Context} context
+   * @return {Promise}
+   */
   run(cache = {}, context) {
     return run(this, cache, context)
   }
+
+  /**
+   * @param {(Dependency|string)[]} deps
+   * @return {this}
+   */
   dependsOn(...deps) {
     this.edgesAndValues = deps.map((d) => {
       if (d instanceof Dependency) {
@@ -68,11 +103,18 @@ class Dependency {
     return this
   }
 
+  /**
+   * @param {() => {}} func
+   * @return {this}
+   */
   provides(func) {
     this._func = func
     return this
   }
 
+  /**
+   * @return {Promise<boolean>}
+   */
   shutdown() {
     // this returns true if a shutdown happens
     return Promise.resolve(false)
@@ -84,53 +126,62 @@ class Dependency {
   For example a connection to a database. It also has stop method to shutdown gracefully
 */
 class SystemDependency extends Dependency {
+  /**
+   * @param {?string} name
+   */
   constructor(name) {
     super(name)
-    this.isMemoized = false
     this.memo = undefined
   }
-
+  /**
+   * @param {any[]} args
+   * @return {Promise<any>}
+   */
   getValue(...args) {
-    if (this.isMemoized) {
+    if (this.memo != null) {
       return this.memo
     }
     const p = Promise.resolve()
       .then(() => this._func(...args))
       .catch((err) => {
-        this._reset()
+        this.memo = undefined
         throw err
       })
-    this.isMemoized = true
     this.memo = p
     return p
   }
 
+  /**
+   * @param {() => {}} func
+   * @return {this}
+   */
   dispose(func) {
     this.stopFunc = func
     return this
   }
 
+  /**
+   * @return {Promise<boolean>}
+   */
   shutdown() {
     if (this.contextItems.size !== 0) {
       return Promise.resolve(false)
     }
 
-    if (!this.isMemoized) {
+    if (this.memo == null) {
       return Promise.resolve(false)
     }
 
-    this._reset()
+    this.memo = undefined
     return Promise.resolve()
       .then(this.stopFunc)
       .then(() => true)
   }
-
-  _reset() {
-    this.isMemoized = false
-    this.memo = undefined
-  }
 }
 
+/**
+ * @param {Object<string, any>|Map<string|Dependency, any>|Iterable<string|Dependency, any>} obj
+ */
 function cacheToMap(obj) {
   if (obj instanceof Map) {
     return obj
@@ -146,55 +197,96 @@ function cacheToMap(obj) {
   )
 }
 
-class NoContext {
+class EmptyContext {
   constructor() {
     this.name = undefined
-    this.successRun = () => {}
-    this.failRun = () => {}
-    this.successShutdown = () => {}
-    this.failShutdown = () => {}
+    this.successRun = (dep, ctx, info) => {}
+    this.failRun = (dep, ctx, info) => {}
+    this.successShutdown = (dep, ctx, info) => {}
+    this.failShutdown = (dep, ctx, info) => {}
   }
-  add() {}
+  /**
+   * @param {Dependency} dep
+   */
+  add(dep) {}
 }
-class Context extends NoContext {
+class Context extends EmptyContext {
+  /**
+   * @param {?string} name
+   */
   constructor(name) {
     super()
     this.name = name
     this.startedDependencies = new Set()
   }
+  /**
+   * @typedef {{onStarted:number, error: ?Error}} ExecInfo
+   * @param {(arg0: Dependency, arg1: Context, arg2: ExecInfo) => void} func
+   * @return {this}
+   */
   onSuccessRun(func) {
     this.successRun = func
     return this
   }
+  /**
+   * @param {(arg0: Dependency, arg1: Context, arg2: ExecInfo) => void} func
+   * @return {this}
+   */
   onFailRun(func) {
     this.failRun = func
     return this
   }
+  /**
+   * @param {(arg0: Dependency, arg1: Context, arg2: ExecInfo) => void} func
+   * @return {this}
+   */
   onSuccessShutdown(func) {
     this.successShutdown = func
     return this
   }
+  /**
+   * @param {(arg0: Dependency, arg1: Context, arg2: ExecInfo) => void} func
+   * @return {this}
+   */
   onFailShutdown(func) {
     this.failShutdown = func
     return this
   }
+  /**
+   * @param {Dependency} dep
+   */
   add(dep) {
     this.startedDependencies.add(dep)
     dep.contextItems.add(this)
   }
+  /**
+   * @param {Dependency} dep
+   */
   remove(dep) {
     this.startedDependencies.delete(dep)
     dep.contextItems.delete(this)
   }
+  /**
+   * @param {Dependency} dep
+   */
   has(dep) {
     return this.startedDependencies.has(dep)
   }
+  /**
+   * @return {number}
+   */
   size() {
     return this.startedDependencies.size
   }
+  /**
+   * @return {Dependency}
+   */
   getFirst() {
     return Array.from(this.startedDependencies)[0]
   }
+  /**
+   * @return {Promise}
+   */
   shutdown() {
     if (this.size() === 0) {
       return Promise.resolve()
@@ -206,7 +298,7 @@ class Context extends NoContext {
       }
       this.remove(d)
       await Promise.all(d.getInverseEdges().map(shutDownDep))
-      const startedOn = performance.now()
+      const startedOn = Date.now()
       const shutdownPromise = d.shutdown()
       shutdownPromise
         .then(
@@ -221,7 +313,13 @@ class Context extends NoContext {
   }
 }
 
-function run(dep, cache = {}, context = new NoContext()) {
+/**
+ * @param {Dependency} dep
+ * @param {Object|Map<string|Dependency, any>|Array<[string|Dependency, any]>} cache
+ * @param {EmptyContext} context
+ * @return {Promise}
+ */
+function run(dep, cache = {}, context = new EmptyContext()) {
   const _cache = cacheToMap(cache)
 
   const getPromiseFromDep = (dep) => {
