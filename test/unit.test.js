@@ -1,3 +1,4 @@
+//@ts-check
 const { run, SystemDependency, Dependency, Context } = require("../index.js")
 
 const assert = require("assert")
@@ -94,7 +95,7 @@ describe("dependency", () => {
       } catch (e) {
         assert.equal(
           e.message,
-          "Cache must be either a Map, an array of key/value pairs or an object"
+          "Must be either a Map, an array of key/value pairs or an object"
         )
       }
     })
