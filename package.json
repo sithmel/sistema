@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "zUnit",
-    "types": "tsc"
+    "types": "tsc",
+    "format": "prettier --ignore-unknown --write ."
   },
   "repository": {
     "type": "git",
@@ -14,7 +15,7 @@
   "keywords": [
     "dependency injection"
   ],
-  "author": "",
+  "author": "Maurizio Lupo <maurizio.lupo@gmail.com>",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/sithmel/sistema/issues"

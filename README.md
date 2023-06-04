@@ -2,7 +2,7 @@
 
 Sistema is a lightweight dependency injection library for node.js. It makes possible to write fast, testable and reliable applications.
 
-# The dependency
+# Dependency
 
 The core concept of sistema is the dependency:
 
@@ -19,7 +19,7 @@ const dbConnection = new Dependency().provides(async () => {
 
 A dependency runs a function and provides a value (optionally wrapped in a promise).
 
-A dependency can depend on others (just one in the example but they can be multiple!):
+A dependency can depend on other dependencies (just one in the example but they can be multiple!):
 
 ```js
 const usersQuery = new Dependency()
@@ -30,7 +30,7 @@ const usersQuery = new Dependency()
   })
 ```
 
-A dependency is executed with:
+A dependency is executed with the **run** method:
 
 ```js
 usersQuery.run().then((rows) => {
@@ -47,7 +47,7 @@ A dependency can take parameters, these are expressed as strings:
 ```js
 const userQuery = new Dependency()
   .dependsOn(dbConnection, "userId")
-  .provides(async (client) => {
+  .provides(async (client, userId) => {
     const result = await client.query("SELECT * FROM users WHERE ID = $1", [
       userId,
     ])
@@ -87,10 +87,10 @@ This way we can run the function like before. The connection is established only
 ```js
 await userQuery.run({ userId: 12345 })
 // ...
-await dbConnection.shutdown() // this returns true if the dispose is executed successfully
+await dbConnection.shutdown() // this returns true if the dispose is executed
 ```
 
-It is often more practical to keep track of all dependencies executed and shut them down in a single command (and in the right order). We do that passing a context to run:
+It is often more practical to keep track of all dependencies executed and shut them down using a single command (and in the right order). We do that passing a context to run:
 
 ```js
 const { Context } = require("sistema")
@@ -104,44 +104,50 @@ await context.shutdown() // this shutdown all SystemDependencies that have been 
 
 # Observability
 
-Sistema has some facility to help observe how the system works and to make it easier to debug.
+Sistema has some facility to help observe how the system works and to make it easier to debug and log.
 Both Dependency, SystemDependency and Context, can have a descriptive name:
 
 ```js
 const userQuery = new Dependency('User query')...
 ```
 
+That can be read in the name attribute:
+
+```js
+console.log(userQuery.name) // 'User query'
+```
+
 A context can be configured with event handlers that are executed when a dependency is executed with success or fail. Same for the shutdown.
 
 ```js
 const context = new Context("main context")
-  .onSuccessRun((dep, ctx, opts) => {
-    // example: 'User query run by main context in 14 ms'
+  .onSuccessRun((dep, ctx, info) => {
+    // example: 'User query ran by the main context in 14 ms'
     console.log(
-      `${dep.name} run by ${ctx.name} in ${
-        (performance.now() - opts.startedOn) / 1000
-      }ms`
+      `${dep.name} ran by the ${ctx.name} in ${
+        performance.now() - opts.startedOn
+      } ms`
     )
   })
-  .onFailRun((dep, ctx, opts) => {
+  .onFailRun((dep, ctx, info) => {
     console.log(
-      `${dep.name} run with Error (${opts.error.message}) by ${ctx.name} in ${
-        (performance.now() - opts.startedOn) / 1000
-      }ms`
+      `${dep.name} ran with Error (${opts.error.message}) by the ${
+        ctx.name
+      } in ${performance.now() - opts.startedOn} ms`
     )
   })
   .onSuccessShutdown((dep, ctx, opts) => {
     console.log(
-      `${dep.name} shutdown by ${ctx.name} in ${
-        (performance.now() - opts.startedOn) / 1000
-      }ms`
+      `${dep.name} was shutdown by the ${ctx.name} in ${
+        performance.now() - opts.startedOn
+      } ms`
     )
   })
   .onFailShutdown((dep, ctx, opts) => {
     console.log(
-      `${dep.name} shutdown with Error (${opts.error.message}) by ${
+      `${dep.name} was shutdown with Error (${opts.error.message}) by the ${
         ctx.name
-      } in ${(performance.now() - opts.startedOn) / 1000}ms`
+      } in ${performance.now() - opts.startedOn} ms`
     )
   })
 ```
@@ -158,9 +164,28 @@ const args = new Map([
 await userQuery.run(args)
 ```
 
-# Sistema Design principles
+_connectionMock_ will be used instead of dbConnection.
+We can only mock some of the dependencies in the dependency graph. This way you can write unit of integration tests.
 
-- FAST: dependencies are executed in parallel, in the optimal order and only once
-- TESTABLE: sistema takes care of the wiring, so that dependencies can be tested in isolation
-- RELIABLE: sistema takes care of shutting dependencies in the right order
-- LIGHTWEIGHT: sistema should do one thing well, and integrate well with other libraries
+## Sistema Design principles
+
+Sistema (Italian for "system") allows to express an application as a directed acyclic graph of dependencies. It uses optimal algorithms to execute part of the graph and return the value of a dependency (a variant of (topological sorting)[https://en.wikipedia.org/wiki/Topological_sorting] that walks multiple graph branches in parallel). In the same way is possible to shutdown the dependencies in the optimal order.
+Sistema does one thing well. It integrates with other libraries rather than be an invasive framework. It has no dependencies and only a small amount of dev dependencies. It uses types but no transpilation for the best dev experience
+
+Sistema is:
+
+- FAST: dependencies are executed in parallel, in the optimal order and only once every execution
+- TESTABLE: Sistema takes care of the wiring, so that dependencies can be tested in isolation
+- RELIABLE: Sistema takes care of shutting dependencies in the right order
+
+## Some history and background
+
+Node.js classic use case is to build networking servers. The environment lacks facilities to start/stop the server. It may be quirky to test, and passing dependencies through layers of functions may be a chore.
+I have known of dependency injection libraries since [architect](https://github.com/c9/architect), and I started trying to figure out my own for a long time. I have used and enjoyed [electrician](https://github.com/tes/electrician) and [systemic](https://github.com/onebeyond/systemic) and wrote a couple of prototype that as far as I know never went into production [diogenes](https://github.com/sithmel/diogenes) and [diesis](https://github.com/sithmel/diesis). I was particularly frustrated with the _diesis_ because I thought it was very innovative, but I realised it missed to deal with some important practicality. And here it is, I started working on **Sistema** after a chat with @BorePlusPlus and @cressie176 authors of Electrician and Systemic. To take the all the best ideas of _Diesis_ and the other libraries together.
+
+## How it differs from Systemic
+
+- With Sistema you can define a dependency in an external package. No need to update the register used by the consumer
+- Sistema uses references instead of strings to define a dependency. This prevents typos and makes not possible to define cyclic dependencies
+- Sistema runs all dependencies in parallel, instead of doing that in series. Same with shutting down.
+- Sistema can be used to define all kind of dependencies, not just the ones necessaries to start the system

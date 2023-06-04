@@ -361,7 +361,7 @@ function run(dep, params = {}, context) {
       if (!_cache.has(dep.id)) {
         let startedOn
         const valuePromise = getPromisesFromDeps(dep.deps()).then((deps) => {
-          startedOn = performance.now()
+          startedOn = Date.now()
           return dep.getValue(...deps)
         })
         if (context != null) {
