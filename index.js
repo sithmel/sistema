@@ -1,6 +1,16 @@
 //@ts-check
 
 /**
+ * Enum for Dependency status
+ * @readonly
+ * @enum {string}
+ */
+const DEPENDENCY_STATE = {
+  READY: "ready",
+  SHUTDOWN: "shutdown",
+  RESETTING: "resetting",
+}
+/**
  * ValueDependency is a fake dependency that is expressed as "string"
  * it throws an error when executed because it should always be passed
  * as parameter
@@ -45,6 +55,8 @@ class Dependency {
     this.name = name
     this._func = (/** @type {any} */ ..._args) => {}
     this.contextItems = new Set()
+    this.startedFunctions = new Set()
+    this.status = DEPENDENCY_STATE.READY
   }
   /**
    * Invoked during the execution to get the list of dependencies
@@ -61,7 +73,20 @@ class Dependency {
    * @return {Promise}
    */
   getValue(...args) {
-    return Promise.resolve().then(() => this._func(...args))
+    if (this.status === DEPENDENCY_STATE.SHUTDOWN) {
+      return Promise.reject(new Error("The dependency is now shutdown"))
+    }
+    const outputPromise = Promise.resolve().then(() => this._func(...args))
+    this.startedFunctions.add(outputPromise)
+    return outputPromise
+      .then((value) => {
+        this.startedFunctions.delete(outputPromise)
+        return value
+      })
+      .catch((err) => {
+        this.startedFunctions.delete(outputPromise)
+        throw err
+      })
   }
   /**
    * Returns type and description of the dependency
@@ -133,7 +158,12 @@ class Dependency {
    * @return {Promise<boolean>}
    */
   shutdown() {
-    return Promise.resolve(false)
+    // cannot shutdown if some context is still using this dependency
+    if (this.contextItems.size !== 0) {
+      return Promise.resolve(false)
+    }
+    this.status = DEPENDENCY_STATE.SHUTDOWN
+    return Promise.allSettled(this.startedFunctions).then(() => true)
   }
 }
 
@@ -161,12 +191,10 @@ class SystemDependency extends Dependency {
     if (this.memo != null) {
       return this.memo
     }
-    const p = Promise.resolve()
-      .then(() => this._func(...args))
-      .catch((err) => {
-        this.memo = undefined
-        throw err
-      })
+    const p = super.getValue(...args).catch((err) => {
+      this.memo = undefined
+      throw err
+    })
     this.memo = p
     return p
   }
@@ -185,16 +213,14 @@ class SystemDependency extends Dependency {
    * @return {Promise<boolean>}
    */
   shutdown() {
-    if (this.contextItems.size !== 0) {
-      return Promise.resolve(false)
-    }
-
+    // cannot shutdown if this systemDependency never started
     if (this.memo == null) {
+      this.status = DEPENDENCY_STATE.SHUTDOWN
       return Promise.resolve(false)
     }
 
     this.memo = undefined
-    return Promise.resolve()
+    return Promise.allSettled(this.startedFunctions)
       .then(() => this.stopFunc())
       .then(() => true)
   }
