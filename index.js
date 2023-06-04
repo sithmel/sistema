@@ -61,7 +61,7 @@ class Dependency {
    * @return {Promise}
    */
   getValue(...args) {
-    return Promise.resolve(this._func(...args))
+    return Promise.resolve().then(() => this._func(...args))
   }
   /**
    * Returns type and description of the dependency
@@ -149,6 +149,7 @@ class SystemDependency extends Dependency {
   constructor(name) {
     super(name)
     this.memo = undefined
+    this.stopFunc = () => {}
   }
   /**
    * Execute a dependency and memoizes it
@@ -160,10 +161,12 @@ class SystemDependency extends Dependency {
     if (this.memo != null) {
       return this.memo
     }
-    const p = Promise.resolve(this._func(...args)).catch((err) => {
-      this.memo = undefined
-      throw err
-    })
+    const p = Promise.resolve()
+      .then(() => this._func(...args))
+      .catch((err) => {
+        this.memo = undefined
+        throw err
+      })
     this.memo = p
     return p
   }
@@ -192,7 +195,7 @@ class SystemDependency extends Dependency {
 
     this.memo = undefined
     return Promise.resolve()
-      .then(this.stopFunc)
+      .then(() => this.stopFunc())
       .then(() => true)
   }
 }
