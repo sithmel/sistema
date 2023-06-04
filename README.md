@@ -169,8 +169,8 @@ We can only mock some of the dependencies in the dependency graph. This way you 
 
 ## Sistema Design principles
 
-Sistema (Italian for "system") allows to express an application as a directed acyclic graph of dependencies. It uses optimal algorithms to execute part of the graph and return the value of a dependency (a variant of (topological sorting)[https://en.wikipedia.org/wiki/Topological_sorting] that walks multiple graph branches in parallel). In the same way is possible to shutdown the dependencies in the optimal order.
-Sistema does one thing well. It integrates with other libraries rather than be an invasive framework. It has no dependencies and only a small amount of dev dependencies. It uses types but no transpilation for the best dev experience
+**Sistema** (Italian for "system") allows to express an application as a directed acyclic graph of functions. It uses optimal algorithms to execute part of the graph and return the value of a dependency using a variant of [topological sorting](https://en.wikipedia.org/wiki/Topological_sorting) that walks multiple graph edges in parallel. In the same way is possible to shutdown the dependencies in the inverse order.
+**Sistema** does one thing well. It integrates with other libraries rather than be an invasive framework. It has no dependencies and only a small amount of dev dependencies. It uses types but no transpilation for the best dev experience.
 
 Sistema is:
 
@@ -178,14 +178,11 @@ Sistema is:
 - TESTABLE: Sistema takes care of the wiring, so that dependencies can be tested in isolation
 - RELIABLE: Sistema takes care of shutting dependencies in the right order
 
-## Some history and background
-
-Node.js classic use case is to build networking servers. The environment lacks facilities to start/stop the server. It may be quirky to test, and passing dependencies through layers of functions may be a chore.
-I have known of dependency injection libraries since [architect](https://github.com/c9/architect), and I started trying to figure out my own for a long time. I have used and enjoyed [electrician](https://github.com/tes/electrician) and [systemic](https://github.com/onebeyond/systemic) and wrote a couple of prototype that as far as I know never went into production [diogenes](https://github.com/sithmel/diogenes) and [diesis](https://github.com/sithmel/diesis). I was particularly frustrated with the _diesis_ because I thought it was very innovative, but I realised it missed to deal with some important practicality. And here it is, I started working on **Sistema** after a chat with @BorePlusPlus and @cressie176 authors of Electrician and Systemic. To take the all the best ideas of _Diesis_ and the other libraries together.
-
 ## How it differs from Systemic
 
-- With Sistema you can define a dependency in an external package. No need to update the register used by the consumer
-- Sistema uses references instead of strings to define a dependency. This prevents typos and makes not possible to define cyclic dependencies
+I enjoyed using [Systemic](https://github.com/onebeyond/systemic) and its predecessor [electrician](https://github.com/tes/electrician) for a long time. _Sistema_ differs in a few key aspects:
+
+- With Sistema you can define a dependency in an external package, **including its dependencies**. This is not possible with Systemic, because it uses a centralised dependencies registry that needs to be defined in the application
+- Sistema uses references instead of strings to define a dependency. This prevents typos and makes not possible to define cyclic dependencies that would reveal themselves only at runtime
 - Sistema runs all dependencies in parallel, instead of doing that in series. Same with shutting down.
-- Sistema can be used to define all kind of dependencies, not just the ones necessaries to start the system
+- Sistema can be used to define all kind of dependencies, not just the ones necessaries to start the application
