@@ -232,12 +232,16 @@ describe("dependency", () => {
       const dep2 = await d.run({}, context)
       assert.equal(dep2, "ABAABCD")
       assert.deepEqual(counter, { a: 1, b: 0, c: 0, d: 1 })
+    })
+    it("must reset", async () => {
+      const dep = await d.run({}, context)
+      assert.equal(dep, "ABAABCD")
+      assert.deepEqual(counter, { a: 1, b: 1, c: 1, d: 1 })
 
-      await context.shutdown()
+      await context.reset()
       counter = { a: 0, b: 0, c: 0, d: 0 }
-
-      const dep3 = await d.run({}, context)
-      assert.equal(dep3, "ABAABCD")
+      const dep2 = await d.run({}, context)
+      assert.equal(dep2, "ABAABCD")
       assert.deepEqual(counter, { a: 1, b: 1, c: 1, d: 1 })
     })
 
@@ -377,7 +381,7 @@ describe("dependency", () => {
       await b.run({}, context)
       assert.deepEqual(depsRun, [a, b])
       await context.shutdown()
-      assert.deepEqual(depsShutdown, [a])
+      assert.deepEqual(depsShutdown, [b, a])
     })
 
     it("must call callback when fail running", async () => {
