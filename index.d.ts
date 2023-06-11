@@ -83,7 +83,7 @@ export class Dependency {
  * This dependency is returned by a function, but its results is memoized and reused.
  * For example a connection to a database.
  */
-export class SystemDependency extends Dependency {
+export class ResourceDependency extends Dependency {
     memo: Promise<any>;
     stopFunc: () => void;
     /**
@@ -193,9 +193,9 @@ export class Context {
     getFirst(): Dependency;
     /**
      * @package
-     * @param {(Dependency) => Promise} func
+     * @param {(arg0: Dependency) => Promise} func
      */
-    _execInverse(func: (Dependency: any) => Promise<any>): any;
+    _execInverse(func: (arg0: Dependency) => Promise<any>): any;
     /**
      * Shuts down all dependencies that are part of this context in the inverse topological order
      * @return {Promise}

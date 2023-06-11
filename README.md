@@ -61,17 +61,17 @@ and must be passed as objects in the run method.
 await userQuery.run({ userId: 12345 })
 ```
 
-## SystemDependencies and context
+## ResourceDependencies and context
 
 In the previous example we open a database connection every time we need a dbConnection. Some dependencies are better to be created once and then reused. And in the case of a database connection we also have to close the connection:
 
 ```js
-const { SystemDependency } = require("sistema")
+const { ResourceDependency } = require("sistema")
 const { Client } = require("pg")
 
 let client
 
-const dbConnection = new SystemDependency()
+const dbConnection = new ResourceDependency()
   .provides(async () => {
     client = new Client()
     // Connect to the PostgreSQL database
@@ -99,13 +99,23 @@ const context = new Context()
 
 await userQuery.run({ userId: 12345 }, context)
 // ...
-await context.shutdown() // this shutdown all SystemDependencies that have been executed
+await context.shutdown() // this shutdown all ResourceDependency that have been executed
 ```
+
+Once a Dependency or a ResourceDependency are shutdown, they no longer works and return an exception when called.
+It is possible to reset a graph of dependencies so that all ResourceDependencies are closed (their "dispose" function is called), but they can still be used.
+
+```js
+await context.reset()
+```
+
+A Dependency shuts down when there are no in-flights calls to that dependency.
+A ResourceDependency shuts down when the dispose function is called successfully.
 
 # Observability
 
 Sistema has some facility to help observe how the system works and to make it easier to debug and log.
-Both Dependency, SystemDependency and Context, can have a descriptive name:
+Both Dependency, ResourceDependency and Context, can have a descriptive name:
 
 ```js
 const userQuery = new Dependency('User query')...
@@ -170,6 +180,9 @@ We can chose to only mock some of the dependencies in the dependency graph. This
 ## Sistema Design principles
 
 **Sistema** (Italian for "system") allows to express an application as a directed acyclic graph of functions. It uses optimal algorithms to execute part of the graph and return the value of a dependency using a variant of [topological sorting](https://en.wikipedia.org/wiki/Topological_sorting) that walks multiple graph edges in parallel. In the same way is possible to shutdown the dependencies in the inverse order.
+
+![Graph example](docs/example.png)
+
 **Sistema** does one thing well. It integrates with other libraries rather than be an invasive framework. It has no dependencies and only a small amount of dev dependencies. It uses types but no transpilation for the best dev experience.
 
 Sistema is:

@@ -194,9 +194,9 @@ class Dependency {
  * This dependency is returned by a function, but its results is memoized and reused.
  * For example a connection to a database.
  */
-class SystemDependency extends Dependency {
+class ResourceDependency extends Dependency {
   /**
-   * Create a SystemDependency object
+   * Create a ResourceDependency object
    * @param {string | undefined} [name] - A description of the dependency
    */
   constructor(name) {
@@ -242,7 +242,7 @@ class SystemDependency extends Dependency {
         return Promise.resolve(false)
       }
     }
-    // cannot shutdown/reset if this systemDependency never started
+    // cannot shutdown/reset if this ResourceDependency never started
     if (this.memo == null) {
       return this.status.change(newStatus, Promise.resolve(false))
     }
@@ -396,23 +396,23 @@ class Context {
 
   /**
    * @package
-   * @param {(Dependency) => Promise} func
+   * @param {(arg0: Dependency) => Promise} func
    */
   _execInverse(func) {
     if (this.size() === 0) {
       return Promise.resolve()
     }
 
-    const shutDownDep = async (d) => {
+    const runFuncOnDep = async (/** @type {Dependency} */ d) => {
       if (!this.has(d)) {
         return
       }
       this.remove(d)
-      await Promise.all(d.getInverseEdges().map(shutDownDep))
+      await Promise.all(d.getInverseEdges().map(runFuncOnDep))
       return func(d)
     }
 
-    return shutDownDep(this.getFirst()).then(() => this._execInverse(func))
+    return runFuncOnDep(this.getFirst()).then(() => this._execInverse(func))
   }
   /**
    * Shuts down all dependencies that are part of this context in the inverse topological order
@@ -494,7 +494,7 @@ function run(dep, params = {}, context) {
 
 module.exports = {
   Dependency,
-  SystemDependency,
+  ResourceDependency,
   Context,
   run,
 }

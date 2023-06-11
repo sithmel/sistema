@@ -1,5 +1,5 @@
 //@ts-check
-const { run, SystemDependency, Dependency, Context } = require("../index.js")
+const { run, ResourceDependency, Dependency, Context } = require("../index.js")
 
 const assert = require("assert")
 
@@ -192,11 +192,11 @@ describe("dependency", () => {
         counter.a++
         return "A"
       })
-      b = new SystemDependency("b").dependsOn(a).provides((a) => {
+      b = new ResourceDependency("b").dependsOn(a).provides((a) => {
         counter.b++
         return a + "B"
       })
-      c = new SystemDependency("c").dependsOn(a, b).provides((a, b) => {
+      c = new ResourceDependency("c").dependsOn(a, b).provides((a, b) => {
         counter.c++
         return a + b + "C"
       })
@@ -256,7 +256,7 @@ describe("dependency", () => {
     })
 
     it("must not memoize when function throw", async () => {
-      const buggy = new SystemDependency().provides(() => {
+      const buggy = new ResourceDependency().provides(() => {
         throw new Error("broken")
       })
       try {
@@ -270,10 +270,10 @@ describe("dependency", () => {
   })
 
   describe("must shutdown single dependency", () => {
-    it("must stop a SystemDependency", async () => {
+    it("must stop a ResourceDependency", async () => {
       let counterStop = 0
 
-      const a = new SystemDependency().disposes(async () => {
+      const a = new ResourceDependency().disposes(async () => {
         await delay(1)
         counterStop++
       })
@@ -293,10 +293,10 @@ describe("dependency", () => {
       }
     })
 
-    it("must reset a SystemDependency", async () => {
+    it("must reset a ResourceDependency", async () => {
       let counterStop = 0
 
-      const a = new SystemDependency().disposes(async () => {
+      const a = new ResourceDependency().disposes(async () => {
         await delay(1)
         counterStop++
       })
@@ -385,17 +385,17 @@ describe("dependency", () => {
       */
       context = new Context()
       stopOrder = []
-      a = new SystemDependency("A").disposes(async () => {
+      a = new ResourceDependency("A").disposes(async () => {
         stopOrder.push("A")
       })
-      b = new SystemDependency("B").dependsOn(a).disposes(async () => {
+      b = new ResourceDependency("B").dependsOn(a).disposes(async () => {
         stopOrder.push("B")
       })
-      c = new SystemDependency("C").dependsOn(a, b).disposes(async () => {
+      c = new ResourceDependency("C").dependsOn(a, b).disposes(async () => {
         stopOrder.push("C")
       })
 
-      d = new SystemDependency("D").dependsOn(b, c).disposes(async () => {
+      d = new ResourceDependency("D").dependsOn(b, c).disposes(async () => {
         stopOrder.push("D")
       })
     })
@@ -437,7 +437,7 @@ describe("dependency", () => {
         A ----> B
       */
       context = new Context()
-      a = new SystemDependency()
+      a = new ResourceDependency()
       b = new Dependency().dependsOn(a)
     })
 
@@ -493,7 +493,7 @@ describe("dependency", () => {
           assert(opts.startedOn > 0)
           assert.equal(opts.error.message, "oh no!")
         })
-      const c = new SystemDependency().disposes(() => {
+      const c = new ResourceDependency().disposes(() => {
         throw new Error("oh no!")
       })
       await c.run({}, context)
