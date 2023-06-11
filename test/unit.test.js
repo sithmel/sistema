@@ -188,19 +188,19 @@ describe("dependency", () => {
       */
       context = new Context()
       counter = { a: 0, b: 0, c: 0, d: 0 }
-      a = new Dependency().provides(() => {
+      a = new Dependency("a").provides(() => {
         counter.a++
         return "A"
       })
-      b = new SystemDependency().dependsOn(a).provides((a) => {
+      b = new SystemDependency("b").dependsOn(a).provides((a) => {
         counter.b++
         return a + "B"
       })
-      c = new SystemDependency().dependsOn(a, b).provides((a, b) => {
+      c = new SystemDependency("c").dependsOn(a, b).provides((a, b) => {
         counter.c++
         return a + b + "C"
       })
-      d = new Dependency().dependsOn(b, c).provides((b, c) => {
+      d = new Dependency("d").dependsOn(b, c).provides((b, c) => {
         counter.d++
         return b + c + "D"
       })
@@ -232,12 +232,16 @@ describe("dependency", () => {
       const dep2 = await d.run({}, context)
       assert.equal(dep2, "ABAABCD")
       assert.deepEqual(counter, { a: 1, b: 0, c: 0, d: 1 })
+    })
+    it("must reset", async () => {
+      const dep = await d.run({}, context)
+      assert.equal(dep, "ABAABCD")
+      assert.deepEqual(counter, { a: 1, b: 1, c: 1, d: 1 })
 
-      await context.shutdown()
+      await context.reset()
       counter = { a: 0, b: 0, c: 0, d: 0 }
-
-      const dep3 = await d.run({}, context)
-      assert.equal(dep3, "ABAABCD")
+      const dep2 = await d.run({}, context)
+      assert.equal(dep2, "ABAABCD")
       assert.deepEqual(counter, { a: 1, b: 1, c: 1, d: 1 })
     })
 
@@ -269,20 +273,97 @@ describe("dependency", () => {
     it("must stop a SystemDependency", async () => {
       let counterStop = 0
 
-      const a = new SystemDependency().dependsOn("ms").dispose(async () => {
+      const a = new SystemDependency().disposes(async () => {
         await delay(1)
         counterStop++
       })
 
-      a.run({ ms: 8 })
+      a.run()
 
       await delay(1)
 
-      const shutdownPromise = a.shutdown()
-
-      return shutdownPromise.then(() => {
+      await a.shutdown().then(() => {
         assert.equal(counterStop, 1)
       })
+      try {
+        await a.run()
+        throw new Error("Oh no!")
+      } catch (e) {
+        assert.equal(e.message, "The dependency is now shutdown")
+      }
+    })
+
+    it("must reset a SystemDependency", async () => {
+      let counterStop = 0
+
+      const a = new SystemDependency().disposes(async () => {
+        await delay(1)
+        counterStop++
+      })
+
+      a.run()
+
+      await delay(1)
+
+      await a.reset().then(() => {
+        assert.equal(counterStop, 1)
+      })
+      try {
+        await a.run()
+        throw new Error("All good")
+      } catch (e) {
+        assert.equal(e.message, "All good")
+      }
+    })
+
+    it("must stop a Dependency", async () => {
+      let counterRun = 0
+
+      const a = new Dependency().provides(async () => {
+        await delay(1)
+        counterRun++
+      })
+
+      a.run()
+      a.run()
+      a.run()
+
+      await delay(1)
+
+      await a.shutdown().then(() => {
+        assert.equal(counterRun, 3)
+      })
+      try {
+        await a.run()
+        throw new Error("Oh no!")
+      } catch (e) {
+        assert.equal(e.message, "The dependency is now shutdown")
+      }
+    })
+
+    it("must reset a Dependency", async () => {
+      let counterRun = 0
+
+      const a = new Dependency().provides(async () => {
+        await delay(1)
+        counterRun++
+      })
+
+      a.run()
+      a.run()
+      a.run()
+
+      await delay(1)
+
+      await a.reset().then(() => {
+        assert.equal(counterRun, 3)
+      })
+      try {
+        await a.run()
+        throw new Error("All good")
+      } catch (e) {
+        assert.equal(e.message, "All good")
+      }
     })
   })
 
@@ -304,17 +385,17 @@ describe("dependency", () => {
       */
       context = new Context()
       stopOrder = []
-      a = new SystemDependency("A").dispose(async () => {
+      a = new SystemDependency("A").disposes(async () => {
         stopOrder.push("A")
       })
-      b = new SystemDependency("B").dependsOn(a).dispose(async () => {
+      b = new SystemDependency("B").dependsOn(a).disposes(async () => {
         stopOrder.push("B")
       })
-      c = new SystemDependency("C").dependsOn(a, b).dispose(async () => {
+      c = new SystemDependency("C").dependsOn(a, b).disposes(async () => {
         stopOrder.push("C")
       })
 
-      d = new SystemDependency("D").dependsOn(b, c).dispose(async () => {
+      d = new SystemDependency("D").dependsOn(b, c).disposes(async () => {
         stopOrder.push("D")
       })
     })
@@ -377,7 +458,7 @@ describe("dependency", () => {
       await b.run({}, context)
       assert.deepEqual(depsRun, [a, b])
       await context.shutdown()
-      assert.deepEqual(depsShutdown, [a])
+      assert.deepEqual(depsShutdown, [b, a])
     })
 
     it("must call callback when fail running", async () => {
@@ -412,7 +493,7 @@ describe("dependency", () => {
           assert(opts.startedOn > 0)
           assert.equal(opts.error.message, "oh no!")
         })
-      const c = new SystemDependency().dispose(() => {
+      const c = new SystemDependency().disposes(() => {
         throw new Error("oh no!")
       })
       await c.run({}, context)

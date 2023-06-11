@@ -77,7 +77,7 @@ const dbConnection = new SystemDependency()
     // Connect to the PostgreSQL database
     return client.connect()
   })
-  .dispose(() => {
+  .disposes(() => {
     client.end()
   })
 ```
@@ -87,7 +87,7 @@ This way we can run the function like before. The connection is established only
 ```js
 await userQuery.run({ userId: 12345 })
 // ...
-await dbConnection.shutdown() // this returns true if the dispose is executed
+await dbConnection.shutdown() // this returns true if the "dispose" function is executed
 ```
 
 It is often more practical to keep track of all dependencies executed and shut them down using a single command (and in the right order). We do that passing a context to run:
@@ -165,7 +165,7 @@ await userQuery.run(args)
 ```
 
 _connectionMock_ will be used instead of dbConnection.
-We can only mock some of the dependencies in the dependency graph. This way you can write unit of integration tests.
+We can chose to only mock some of the dependencies in the dependency graph. This way you can write both units and integration tests.
 
 ## Sistema Design principles
 
