@@ -28,7 +28,7 @@ describe("status", () => {
     const s = await status.get()
     assert.equal(s, "newState3")
   })
-  it("change the status, ensure promises are fullfilled", async () => {
+  it("change the status, ensure promises are fulfilled", async () => {
     let fulfilled = 0
     status.change(
       "newState1",

@@ -1,5 +1,6 @@
 //@ts-check
 const AsyncStatus = require("./asyncstatus")
+
 /**
  * Enum for Dependency status
  * @readonly
@@ -155,32 +156,37 @@ class Dependency {
     this._func = func
     return this
   }
+
+  async _changeState(newStatus) {
+    const currentStatus = await this.status.get()
+    if (newStatus === DEPENDENCY_STATUS.SHUTDOWN) {
+      if (currentStatus === DEPENDENCY_STATUS.SHUTDOWN) {
+        return Promise.resolve(false)
+      }
+      // cannot shutdown if some context is still using this dependency
+      if (this.contextItems.size !== 0) {
+        return Promise.resolve(false)
+      }
+    }
+    return this.status.change(
+      newStatus,
+      Promise.allSettled(this.startedFunctions).then(() => true)
+    )
+  }
+
   /**
    * It shuts down the dependency and returns true if shutdown is executed
    * @return {Promise<boolean>}
    */
   async shutdown() {
-    const currentStatus = await this.status.get()
-    if (currentStatus === DEPENDENCY_STATUS.SHUTDOWN) {
-      return Promise.resolve(false)
-    }
-    // cannot shutdown if some context is still using this dependency
-    if (this.contextItems.size !== 0) {
-      return Promise.resolve(false)
-    }
-    return this.status.change(
-      DEPENDENCY_STATUS.SHUTDOWN,
-      Promise.allSettled(this.startedFunctions).then(() => true)
-    )
+    return this._changeState(DEPENDENCY_STATUS.SHUTDOWN)
   }
   /**
    * It reset the dependency
    * @return {Promise<boolean>}
    */
   async reset() {
-    await this.shutdown()
-    await this.status.get()
-    return this.status.change(DEPENDENCY_STATUS.READY, Promise.resolve(true))
+    return this._changeState(DEPENDENCY_STATUS.READY)
   }
 }
 
@@ -220,36 +226,30 @@ class SystemDependency extends Dependency {
    * @param {() => any|Promise<any>} func
    * @return {this}
    */
-  dispose(func) {
+  disposes(func) {
     this.stopFunc = func
     return this
   }
 
-  /**
-   * It shuts down the dependency and returns true if shutdown is executed
-   * @return {Promise<boolean>}
-   */
-  async shutdown() {
+  async _changeState(newStatus) {
     const currentStatus = await this.status.get()
-    if (currentStatus === DEPENDENCY_STATUS.SHUTDOWN) {
-      return Promise.resolve(false)
+    if (newStatus === DEPENDENCY_STATUS.SHUTDOWN) {
+      if (currentStatus === DEPENDENCY_STATUS.SHUTDOWN) {
+        return Promise.resolve(false)
+      }
+      // cannot shutdown if some context is still using this dependency
+      if (this.contextItems.size !== 0) {
+        return Promise.resolve(false)
+      }
     }
-    // cannot shutdown if some context is still using this dependency
-    if (this.contextItems.size !== 0) {
-      return Promise.resolve(false)
-    }
-
-    // cannot shutdown if this systemDependency never started
+    // cannot shutdown/reset if this systemDependency never started
     if (this.memo == null) {
-      return this.status.change(
-        DEPENDENCY_STATUS.SHUTDOWN,
-        Promise.resolve(false)
-      )
+      return this.status.change(newStatus, Promise.resolve(false))
     }
 
     this.memo = undefined
     return this.status.change(
-      DEPENDENCY_STATUS.SHUTDOWN,
+      newStatus,
       Promise.allSettled(this.startedFunctions)
         .then(() => this.stopFunc())
         .then(() => true)
@@ -353,7 +353,7 @@ class Context {
    * @return {this}
    */
   onFailReset(func) {
-    this.failShutdown = func
+    this.failReset = func
     return this
   }
   /**
@@ -412,7 +412,7 @@ class Context {
       return func(d)
     }
 
-    return shutDownDep(this.getFirst()).then(() => this.shutdown())
+    return shutDownDep(this.getFirst()).then(() => this._execInverse(func))
   }
   /**
    * Shuts down all dependencies that are part of this context in the inverse topological order
@@ -424,10 +424,12 @@ class Context {
       const shutdownPromise = d.shutdown()
       shutdownPromise
         .then(
-          (hasShutdown) =>
+          (/** @type {boolean} */ hasShutdown) =>
             hasShutdown && this.successShutdown(d, this, { startedOn })
         )
-        .catch((error) => this.failShutdown(d, this, { error, startedOn }))
+        .catch((/** @type {Error} */ error) =>
+          this.failShutdown(d, this, { error, startedOn })
+        )
       return shutdownPromise
     })
   }
@@ -441,10 +443,12 @@ class Context {
       const resetPromise = d.reset()
       resetPromise
         .then(
-          (hasShutdown) =>
+          (/** @type {boolean} */ hasShutdown) =>
             hasShutdown && this.successReset(d, this, { startedOn })
         )
-        .catch((error) => this.failReset(d, this, { error, startedOn }))
+        .catch((/** @type {Error} */ error) =>
+          this.failReset(d, this, { error, startedOn })
+        )
       return resetPromise
     })
   }
