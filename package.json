@@ -22,6 +22,7 @@
   },
   "homepage": "https://github.com/sithmel/sistema#readme",
   "devDependencies": {
+    "@types/node": "^20.3.0",
     "prettier": "^2.8.8",
     "typescript": "^5.1.3",
     "zunit": "^4.0.2"

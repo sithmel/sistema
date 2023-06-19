@@ -2,7 +2,7 @@
 
 Sistema is a lightweight dependency injection library for node.js. It makes possible to write fast, testable and reliable applications.
 
-# Dependency
+## Dependency
 
 The core concept of sistema is the dependency:
 
@@ -40,7 +40,7 @@ usersQuery.run().then((rows) => {
 
 The output of run is always a promise.
 
-# Parameters
+## Parameters
 
 A dependency can take parameters, these are expressed as strings:
 
@@ -90,7 +90,7 @@ await userQuery.run({ userId: 12345 })
 await dbConnection.shutdown() // this returns true if the "dispose" function is executed
 ```
 
-It is often more practical to keep track of all dependencies executed and shut them down using a single command (and in the right order). We do that passing a context to run:
+It is often more practical to keep track of all dependencies executed and shut them down using a single command (and in the right order). We do that passing a context to _run_:
 
 ```js
 const { Context } = require("sistema")
@@ -99,18 +99,59 @@ const context = new Context()
 
 await userQuery.run({ userId: 12345 }, context)
 // ...
-await context.shutdown() // this shutdown all ResourceDependency that have been executed
+await context.shutdown() // this shutdown all Dependency that have been executed in the same context
 ```
 
 Once a Dependency or a ResourceDependency are shutdown, they no longer works and return an exception when called.
-It is possible to reset a graph of dependencies so that all ResourceDependencies are closed (their "dispose" function is called), but they can still be used.
+It is possible to reset a graph of dependencies so that all ResourceDependencies are closed (their "dispose" function is called), but they can still be used and recreated.
 
 ```js
 await context.reset()
 ```
 
-A Dependency shuts down when there are no in-flights calls to that dependency.
-A ResourceDependency shuts down when the dispose function is called successfully.
+A Dependency shuts down when there are no in-flights calls to the function provided.
+A ResourceDependency shuts down when the dispose function returns.
+
+## Default context
+
+When no context is passed to _run_, a default context is automatically used. So we can rewrite the previous example like this:
+
+```js
+const { defaultContext } = require("sistema")
+
+await userQuery.run({ userId: 12345 })
+// ...
+await defaultContext.shutdown() // this shutdown all Dependencies that have been executed
+```
+
+## Multiple contexts
+
+When dealing with dependencies that are part of different workflows you can use more than one context.
+So that shutting down (or resetting) a group of dependencies doesn't shut down another group.
+If a dependency belongs to multiple groups, it can only shutdown after all groups shut down.
+
+## Run multiple dependencies at once
+
+Promise.all can be used to run multiple dependencies at once:
+
+```js
+const [a, b] = await Promise.all([depA.run(), depB.run()])
+```
+
+This should return the correct result (if the dependencies are pure functions). But common dependencies can be executed multiple times. To avoid this, you can use run:
+
+```js
+const { run } = require("sistema")
+const [a, b] = await run([depA, depB])
+```
+
+"run" can also be used to run a single dependency:
+
+```js
+depA.run()
+// is equivalent to
+run(depA)
+```
 
 # Observability
 
@@ -162,9 +203,20 @@ const context = new Context("main context")
   })
 ```
 
+There is also _onSuccessReset_ and _onFailReset_
+
+Dependencies have extra attributes and methods that help with the debugging:
+
+```js
+const dep = new ResourceDependency("Test")
+dep.toString() // returns "ResourceDependency Test"
+dep.getEdges() // returns the dependencies as an array
+dep.getInverseEdges() // returns all the dependents as an array
+```
+
 # Testability
 
-With sistema we can test a dependency mocking easily any dependency. Just passing it in the run method:
+With sistema we can test a dependency mocking easily any dependency. Just passing it in the run method using a Map:
 
 ```js
 const args = new Map([
@@ -175,11 +227,11 @@ await userQuery.run(args)
 ```
 
 _connectionMock_ will be used instead of dbConnection.
-We can chose to only mock some of the dependencies in the dependency graph. This way you can write both units and integration tests.
+This can be used to mock some or even all of the dependencies in the dependency graph. To implement unit and integration tests.
 
 ## Sistema Design principles
 
-**Sistema** (Italian for "system") allows to express an application as a directed acyclic graph of functions. It uses optimal algorithms to execute part of the graph and return the value of a dependency using a variant of [topological sorting](https://en.wikipedia.org/wiki/Topological_sorting) that walks multiple graph edges in parallel. In the same way is possible to shutdown the dependencies in the inverse order.
+**Sistema** (Italian for "system") allows to express an application as a directed acyclic graph of functions. It executes the graphs of functions so that the dependencies constraint is respected. The algorithm is a derivative of DFS similar to [topological sorting](https://en.wikipedia.org/wiki/Topological_sorting) that walks multiple graph edges in parallel. In the same way is possible to shutdown the dependencies in the inverse order.
 
 ![Graph example](docs/example.png)
 

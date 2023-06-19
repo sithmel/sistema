@@ -1,4 +1,6 @@
 //@ts-check
+const { performance } = require("perf_hooks")
+
 const AsyncStatus = require("./asyncstatus")
 
 /**
@@ -119,7 +121,7 @@ class Dependency {
    * @param {Context} [context]
    * @return {Promise}
    */
-  run(params = {}, context) {
+  run(params, context) {
     return run(this, params, context)
   }
 
@@ -156,8 +158,13 @@ class Dependency {
     this._func = func
     return this
   }
-
-  async _changeState(newStatus) {
+  /**
+   * Shutdown or reset
+   * @package
+   * @param {string} newStatus
+   * @return {Promise}
+   */
+  async _shutdownOrReset(newStatus) {
     const currentStatus = await this.status.get()
     if (newStatus === DEPENDENCY_STATUS.SHUTDOWN) {
       if (currentStatus === DEPENDENCY_STATUS.SHUTDOWN) {
@@ -179,14 +186,14 @@ class Dependency {
    * @return {Promise<boolean>}
    */
   async shutdown() {
-    return this._changeState(DEPENDENCY_STATUS.SHUTDOWN)
+    return this._shutdownOrReset(DEPENDENCY_STATUS.SHUTDOWN)
   }
   /**
    * It reset the dependency
    * @return {Promise<boolean>}
    */
   async reset() {
-    return this._changeState(DEPENDENCY_STATUS.READY)
+    return this._shutdownOrReset(DEPENDENCY_STATUS.READY)
   }
 }
 
@@ -230,8 +237,12 @@ class ResourceDependency extends Dependency {
     this.stopFunc = func
     return this
   }
-
-  async _changeState(newStatus) {
+  /**
+   * Shutdown or reset
+   * @param {string} newStatus
+   * @return {Promise}
+   */
+  async _shutdownOrReset(newStatus) {
     const currentStatus = await this.status.get()
     if (newStatus === DEPENDENCY_STATUS.SHUTDOWN) {
       if (currentStatus === DEPENDENCY_STATUS.SHUTDOWN) {
@@ -420,7 +431,7 @@ class Context {
    */
   shutdown() {
     return this._execInverse((d) => {
-      const startedOn = Date.now()
+      const startedOn = performance.now()
       const shutdownPromise = d.shutdown()
       shutdownPromise
         .then(
@@ -439,7 +450,7 @@ class Context {
    */
   reset() {
     return this._execInverse((d) => {
-      const startedOn = Date.now()
+      const startedOn = performance.now()
       const resetPromise = d.reset()
       resetPromise
         .then(
@@ -453,6 +464,8 @@ class Context {
     })
   }
 }
+
+const defaultContext = new Context("Default context")
 /**
  * It runs one or more dependencies
  * All the dependencies are executed only once and in the correct order
@@ -461,27 +474,25 @@ class Context {
  * @param {Context | undefined} [context] - Optional context
  * @return {Promise}
  */
-function run(dep, params = {}, context) {
+function run(dep, params = {}, context = defaultContext) {
   const _cache = paramsToMap(params)
 
   const getPromiseFromDep = (dep) => {
-    if (context != null && dep instanceof Dependency) {
+    if (dep instanceof Dependency) {
       context.add(dep)
     }
     return Promise.resolve().then(() => {
       if (!_cache.has(dep.id)) {
         let startedOn
         const valuePromise = getPromisesFromDeps(dep.deps()).then((deps) => {
-          startedOn = Date.now()
+          startedOn = performance.now()
           return dep.getValue(...deps)
         })
-        if (context != null) {
-          valuePromise
-            .then(() => context.successRun(dep, context, { startedOn }))
-            .catch((error) => {
-              context.failRun(dep, context, { error, startedOn })
-            })
-        }
+        valuePromise
+          .then(() => context.successRun(dep, context, { startedOn }))
+          .catch((error) => {
+            context.failRun(dep, context, { error, startedOn })
+          })
         _cache.set(dep.id, valuePromise)
       }
       return _cache.get(dep.id)
@@ -497,4 +508,5 @@ module.exports = {
   ResourceDependency,
   Context,
   run,
+  defaultContext,
 }
