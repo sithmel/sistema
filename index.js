@@ -474,11 +474,11 @@ const defaultContext = new Context("Default context")
  * @param {Context | undefined} [context] - Optional context
  * @return {Promise}
  */
-function run(dep, params = {}, context = defaultContext) {
+function run(dep, params = {}, context) {
   const _cache = paramsToMap(params)
 
   const getPromiseFromDep = (dep) => {
-    if (dep instanceof Dependency) {
+    if (context != null && dep instanceof Dependency) {
       context.add(dep)
     }
     return Promise.resolve().then(() => {
@@ -488,11 +488,13 @@ function run(dep, params = {}, context = defaultContext) {
           startedOn = performance.now()
           return dep.getValue(...deps)
         })
-        valuePromise
-          .then(() => context.successRun(dep, context, { startedOn }))
-          .catch((error) => {
-            context.failRun(dep, context, { error, startedOn })
-          })
+        if (context != null) {
+          valuePromise
+            .then(() => context.successRun(dep, context, { startedOn }))
+            .catch((error) => {
+              context.failRun(dep, context, { error, startedOn })
+            })
+        }
         _cache.set(dep.id, valuePromise)
       }
       return _cache.get(dep.id)
@@ -508,5 +510,4 @@ module.exports = {
   ResourceDependency,
   Context,
   run,
-  defaultContext,
 }

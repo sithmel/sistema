@@ -67,7 +67,13 @@ export class Dependency {
      * @return {this}
      */
     provides(func: () => any): this;
-    _changeState(newStatus: any): Promise<any>;
+    /**
+     * Shutdown or reset
+     * @package
+     * @param {string} newStatus
+     * @return {Promise}
+     */
+    _shutdownOrReset(newStatus: string): Promise<any>;
     /**
      * It shuts down the dependency and returns true if shutdown is executed
      * @return {Promise<boolean>}

@@ -38,7 +38,7 @@ usersQuery.run().then((rows) => {
 })
 ```
 
-The output of run is always a promise.
+The return value of run is always a promise.
 
 ## Parameters
 
@@ -63,7 +63,7 @@ await userQuery.run({ userId: 12345 })
 
 ## ResourceDependencies and context
 
-In the previous example we open a database connection every time we need a dbConnection. Some dependencies are better to be created once and then reused. And in the case of a database connection we also have to close the connection:
+In the previous example we open a database connection every time we need a dbConnection. Dependencies like that should behave like _resources_: they are created once, used as many times as needed and then disposed (for example closing the database connection). They are called resourceDependencies:
 
 ```js
 const { ResourceDependency } = require("sistema")
@@ -99,40 +99,34 @@ const context = new Context()
 
 await userQuery.run({ userId: 12345 }, context)
 // ...
-await context.shutdown() // this shutdown all Dependency that have been executed in the same context
+await context.shutdown() // this shuts down all Dependency that have been executed in the same context
 ```
 
-Once a Dependency or a ResourceDependency are shutdown, they no longer works and return an exception when called.
+Once a Dependency or a ResourceDependency are shut down, they no longer work and return an exception when called.
 It is possible to reset a graph of dependencies so that all ResourceDependencies are closed (their "dispose" function is called), but they can still be used and recreated.
 
 ```js
 await context.reset()
 ```
 
+_Reset_ can be called on an individual dependency as well:
+
+```js
+await dbConnection.reset()
+```
+
 A Dependency shuts down when there are no in-flights calls to the function provided.
 A ResourceDependency shuts down when the dispose function returns.
 
-## Default context
-
-When no context is passed to _run_, a default context is automatically used. So we can rewrite the previous example like this:
-
-```js
-const { defaultContext } = require("sistema")
-
-await userQuery.run({ userId: 12345 })
-// ...
-await defaultContext.shutdown() // this shutdown all Dependencies that have been executed
-```
-
 ## Multiple contexts
 
-When dealing with dependencies that are part of different workflows you can use more than one context.
+When dealing with dependencies that are part of different lifecycle you can use more than one context.
 So that shutting down (or resetting) a group of dependencies doesn't shut down another group.
 If a dependency belongs to multiple groups, it can only shutdown after all groups shut down.
 
 ## Run multiple dependencies at once
 
-Promise.all can be used to run multiple dependencies at once:
+Theoretically, _Promise.all_ can be used to run multiple dependencies at once:
 
 ```js
 const [a, b] = await Promise.all([depA.run(), depB.run()])
@@ -235,7 +229,7 @@ This can be used to mock some or even all of the dependencies in the dependency 
 
 ![Graph example](docs/example.png)
 
-**Sistema** does one thing well. It integrates with other libraries rather than be an invasive framework. It has no dependencies and only a small amount of dev dependencies. It uses types but no transpilation for the best dev experience.
+**Sistema** does one thing well. It integrates with other libraries rather than being an invasive framework. It has no dependencies and only a small amount of dev dependencies. It uses types but no transpilation for the best dev experience.
 
 Sistema is:
 
