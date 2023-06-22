@@ -1,5 +1,12 @@
 //@ts-check
-const { run, ResourceDependency, Dependency, Context } = require("../index.js")
+const {
+  run,
+  ResourceDependency,
+  Dependency,
+  Context,
+  CONTEXT_EVENTS,
+  DEPENDENCY_TIMINGS,
+} = require("../index.js")
 
 const assert = require("assert")
 
@@ -429,14 +436,14 @@ describe("dependency", () => {
     })
   })
 
-  describe("context callback", () => {
-    let a, b, context
+  describe("context callback and _info_", () => {
+    let a, b, ctx
 
     beforeEach(() => {
       /*
         A ----> B
       */
-      context = new Context()
+      ctx = new Context()
       a = new ResourceDependency()
       b = new Dependency().dependsOn(a)
     })
@@ -444,62 +451,113 @@ describe("dependency", () => {
     it("must call callback on success", async () => {
       const depsRun = []
       const depsShutdown = []
-      context.onSuccessRun((dep, ctx, opts) => {
-        depsRun.push(dep)
-        assert.equal(context, ctx)
-        assert(opts.startedOn > 0)
-      })
-      context.onSuccessShutdown((dep, ctx, opts) => {
-        depsShutdown.push(dep)
-        assert.equal(context, ctx)
-        assert(opts.startedOn > 0)
-      })
+      ctx.on(
+        CONTEXT_EVENTS.SUCCESS_RUN,
+        ({ dependency, context, timeStart, timeEnd }) => {
+          depsRun.push(dependency)
+          assert.equal(context, ctx)
+          assert(timeStart > 0)
+          assert(timeEnd > 0)
+        }
+      )
+      ctx.on(
+        CONTEXT_EVENTS.SUCCESS_SHUTDOWN,
+        ({ dependency, context, timeStart, timeEnd }) => {
+          depsShutdown.push(dependency)
+          assert.equal(context, ctx)
+          assert(timeStart > 0)
+          assert(timeEnd > 0)
+        }
+      )
 
-      await b.run({}, context)
+      await b.run({}, ctx)
       assert.deepEqual(depsRun, [a, b])
-      await context.shutdown()
+      await ctx.shutdown()
       assert.deepEqual(depsShutdown, [b, a])
     })
 
+    it("must show timings", async () => {
+      const [_, info] = await run([b, DEPENDENCY_TIMINGS], {}, ctx)
+      assert.equal(info.length, 2)
+
+      assert.equal(info[0].context, ctx)
+      assert(info[0].timeStart > 0)
+      assert(info[0].timeEnd > 0)
+      assert.equal(info[0].dependency, a)
+
+      assert.equal(info[1].context, ctx)
+      assert(info[1].timeStart > 0)
+      assert(info[1].timeEnd > 0)
+      assert.equal(info[1].dependency, b)
+    })
+
+    it("must show timings when is a dependency", async () => {
+      const c = new Dependency()
+        .dependsOn(b, DEPENDENCY_TIMINGS)
+        .provides((_b, info) => {
+          assert.equal(info.length, 2)
+
+          assert.equal(info[0].context, ctx)
+          assert(info[0].timeStart > 0)
+          assert(info[0].timeEnd > 0)
+          assert.equal(info[0].dependency, a)
+
+          assert.equal(info[1].context, ctx)
+          assert(info[1].timeStart > 0)
+          assert(info[1].timeEnd > 0)
+          assert.equal(info[1].dependency, b)
+        })
+
+      return run(c, {}, ctx)
+    })
+
     it("must call callback when fail running", async () => {
-      context
-        .onSuccessRun(() => {
+      ctx
+        .on(CONTEXT_EVENTS.SUCCESS_RUN, () => {
           throw new Error("it should not enter here")
         })
-        .onFailRun((dep, ctx, opts) => {
-          assert.equal(dep, c)
-          assert.equal(context, ctx)
-          assert(opts.startedOn > 0)
-          assert.equal(opts.error.message, "oh no!")
-        })
+        .on(
+          CONTEXT_EVENTS.FAIL_RUN,
+          ({ dependency, context, timeStart, timeEnd, error }) => {
+            assert.equal(dependency, c)
+            assert.equal(context, ctx)
+            assert(timeStart > 0)
+            assert(timeEnd > 0)
+            assert.equal(error.message, "oh no!")
+          }
+        )
       const c = new Dependency().provides(() => {
         throw new Error("oh no!")
       })
       try {
-        await c.run({}, context)
+        await c.run({}, ctx)
       } catch (e) {
         // we ignore the error so we let the assertion run
       }
     })
 
     it("must call callback when fail shutting down", async () => {
-      context
-        .onSuccessShutdown(() => {
+      ctx
+        .on(CONTEXT_EVENTS.SUCCESS_SHUTDOWN, () => {
           throw new Error("it should not enter here")
         })
-        .onFailShutdown((dep, ctx, opts) => {
-          assert.equal(dep, c)
-          assert.equal(context, ctx)
-          assert(opts.startedOn > 0)
-          assert.equal(opts.error.message, "oh no!")
-        })
+        .on(
+          CONTEXT_EVENTS.FAIL_SHUTDOWN,
+          ({ dependency, context, timeStart, timeEnd, error }) => {
+            assert.equal(dependency, c)
+            assert.equal(context, ctx)
+            assert(timeStart > 0)
+            assert(timeEnd > 0)
+            assert.equal(error.message, "oh no!")
+          }
+        )
       const c = new ResourceDependency().disposes(() => {
         throw new Error("oh no!")
       })
-      await c.run({}, context)
+      await c.run({}, ctx)
 
       try {
-        await context.shutdown()
+        await ctx.shutdown()
       } catch (e) {
         // we ignore the error so we let the assertion run
       }

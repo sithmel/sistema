@@ -57,10 +57,10 @@ export class Dependency {
      * Dependencies can be listed here
      * A string will be used as parameter that
      * MUST be passed in the run method
-     * @param {(Dependency|string)[]} deps
+     * @param {(Dependency|string|Symbol)[]} deps
      * @return {this}
      */
-    dependsOn(...deps: (Dependency | string)[]): this;
+    dependsOn(...deps: (Dependency | string | Symbol)[]): this;
     /**
      * Add function that provides the dependency
      * @param {() => any} func
@@ -104,74 +104,13 @@ export class ResourceDependency extends Dependency {
  * so that can be shutdown all at once. It also helps observability
  * allowing to keep track of execution and failures
  */
-export class Context {
+export class Context extends EventEmitter {
     /**
      * @param {string | undefined} [name] - A description of the context
      */
     constructor(name?: string | undefined);
     name: string;
     startedDependencies: Set<any>;
-    successRun: (_dep: any, _ctx: any, _info: any) => void;
-    failRun: (_dep: any, _ctx: any, _info: any) => void;
-    successShutdown: (_dep: any, _ctx: any, _info: any) => void;
-    failShutdown: (_dep: any, _ctx: any, _info: any) => void;
-    successReset: (_dep: any, _ctx: any, _info: any) => void;
-    failReset: (_dep: any, _ctx: any, _info: any) => void;
-    /**
-     * Adds a function that runs whenever a dependency is successfully executed
-     * @typedef {{onStarted:number, error: Error|undefined}} ExecInfo
-     * @param {(arg0: Dependency, arg1: Context, arg2: ExecInfo) => void} func
-     * @return {this}
-     */
-    onSuccessRun(func: (arg0: Dependency, arg1: Context, arg2: {
-        onStarted: number;
-        error: Error | undefined;
-    }) => void): this;
-    /**
-     * Adds a function that runs whenever a dependency throws an exception
-     * @param {(arg0: Dependency, arg1: Context, arg2: ExecInfo) => void} func
-     * @return {this}
-     */
-    onFailRun(func: (arg0: Dependency, arg1: Context, arg2: {
-        onStarted: number;
-        error: Error | undefined;
-    }) => void): this;
-    /**
-     * Adds a function that runs whenever a dependency is successfully shutdown
-     * @param {(arg0: Dependency, arg1: Context, arg2: ExecInfo) => void} func
-     * @return {this}
-     */
-    onSuccessShutdown(func: (arg0: Dependency, arg1: Context, arg2: {
-        onStarted: number;
-        error: Error | undefined;
-    }) => void): this;
-    /**
-     * Adds a function that runs whenever a dependency fails to shutdown
-     * @param {(arg0: Dependency, arg1: Context, arg2: ExecInfo) => void} func
-     * @return {this}
-     */
-    onFailShutdown(func: (arg0: Dependency, arg1: Context, arg2: {
-        onStarted: number;
-        error: Error | undefined;
-    }) => void): this;
-    /**
-     * Adds a function that runs whenever a dependency is successfully reset
-     * @param {(arg0: Dependency, arg1: Context, arg2: ExecInfo) => void} func
-     * @return {this}
-     */
-    onSuccessReset(func: (arg0: Dependency, arg1: Context, arg2: {
-        onStarted: number;
-        error: Error | undefined;
-    }) => void): this;
-    /**
-     * Adds a function that runs whenever a dependency fails to reset
-     * @param {(arg0: Dependency, arg1: Context, arg2: ExecInfo) => void} func
-     * @return {this}
-     */
-    onFailReset(func: (arg0: Dependency, arg1: Context, arg2: {
-        onStarted: number;
-        error: Error | undefined;
-    }) => void): this;
     /**
      * @package
      * @param {Dependency} dep
@@ -216,12 +155,25 @@ export class Context {
 /**
  * It runs one or more dependencies
  * All the dependencies are executed only once and in the correct order
- * @param {Dependency|Array<Dependency>} dep - one or more dependencies
+ * @param {Dependency|string|Array<Dependency|string>} dep - one or more dependencies
  * @param {Object|Map<string|Dependency, any>|Array<[string|Dependency, any]>} [params] - parameters. This can also be used to mock a dependency (using a Map)
  * @param {Context | undefined} [context] - Optional context
  * @return {Promise}
  */
-export function run(dep: Dependency | Array<Dependency>, params?: any | Map<string | Dependency, any> | Array<[string | Dependency, any]>, context?: Context | undefined): Promise<any>;
+export function run(dep: Dependency | string | Array<Dependency | string>, params?: any | Map<string | Dependency, any> | Array<[string | Dependency, any]>, context?: Context | undefined): Promise<any>;
+/**
+ * Enum context events
+ */
+export type CONTEXT_EVENTS = string;
+export namespace CONTEXT_EVENTS {
+    let SUCCESS_RUN: string;
+    let FAIL_RUN: string;
+    let SUCCESS_SHUTDOWN: string;
+    let FAIL_SHUTDOWN: string;
+    let SUCCESS_RESET: string;
+    let FAIL_RESET: string;
+}
+export const DEPENDENCY_TIMINGS: unique symbol;
 import AsyncStatus = require("./asyncstatus");
 /**
  * ValueDependency is a fake dependency that is expressed as "string"
@@ -231,10 +183,10 @@ import AsyncStatus = require("./asyncstatus");
  */
 declare class ValueDependency {
     /**
-     * @param {string} name
+     * @param {string|Symbol} name
      */
-    constructor(name: string);
-    id: string;
+    constructor(name: string | Symbol);
+    id: string | Symbol;
     /**
      * @package
      */
@@ -244,5 +196,6 @@ declare class ValueDependency {
      */
     deps(): Array<Dependency | ValueDependency>;
 }
+import { EventEmitter } from "events";
 export {};
 //# sourceMappingURL=index.d.ts.map

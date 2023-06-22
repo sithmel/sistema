@@ -1,8 +1,9 @@
 //@ts-check
 const { performance } = require("perf_hooks")
-
+const { EventEmitter } = require("events")
 const AsyncStatus = require("./asyncstatus")
 
+const DEPENDENCY_TIMINGS = Symbol()
 /**
  * Enum for Dependency status
  * @readonly
@@ -14,6 +15,33 @@ const DEPENDENCY_STATUS = {
 }
 
 /**
+ * Enum context events
+ * @readonly
+ * @enum {string}
+ */
+const CONTEXT_EVENTS = {
+  SUCCESS_RUN: "successRun",
+  FAIL_RUN: "failRun",
+  SUCCESS_SHUTDOWN: "successShutdown",
+  FAIL_SHUTDOWN: "failShutdown",
+  SUCCESS_RESET: "successReset",
+  FAIL_RESET: "failReset",
+}
+
+/**
+ * @param {string|Dependency|Symbol} d
+ * @returns {Dependency|ValueDependency}
+ */
+function getDependencyOrValueDependency(d) {
+  if (d instanceof Dependency) {
+    return d
+  } else if (typeof d === "string" || typeof d === "symbol") {
+    return new ValueDependency(d)
+  } else {
+    throw new Error("A function can depend on a dependency or a string/symbol")
+  }
+}
+/**
  * ValueDependency is a fake dependency that is expressed as "string"
  * it throws an error when executed because it should always be passed
  * as parameter
@@ -21,7 +49,7 @@ const DEPENDENCY_STATUS = {
  */
 class ValueDependency {
   /**
-   * @param {string} name
+   * @param {string|Symbol} name
    */
   constructor(name) {
     this.id = name
@@ -129,19 +157,11 @@ class Dependency {
    * Dependencies can be listed here
    * A string will be used as parameter that
    * MUST be passed in the run method
-   * @param {(Dependency|string)[]} deps
+   * @param {(Dependency|string|Symbol)[]} deps
    * @return {this}
    */
   dependsOn(...deps) {
-    this.edgesAndValues = deps.map((d) => {
-      if (d instanceof Dependency) {
-        return d
-      } else if (typeof d === "string") {
-        return new ValueDependency(d)
-      } else {
-        throw new Error("A function can depend on a dependency or a string")
-      }
-    })
+    this.edgesAndValues = deps.map(getDependencyOrValueDependency)
     this.edgesAndValues
       .filter((d) => d instanceof Dependency)
       .forEach((d) => {
@@ -292,80 +312,14 @@ function paramsToMap(obj) {
  * so that can be shutdown all at once. It also helps observability
  * allowing to keep track of execution and failures
  */
-class Context {
+class Context extends EventEmitter {
   /**
    * @param {string | undefined} [name] - A description of the context
    */
   constructor(name) {
+    super()
     this.name = name
     this.startedDependencies = new Set()
-
-    this.successRun =
-      this.failRun =
-      this.successShutdown =
-      this.failShutdown =
-      this.successReset =
-      this.failReset =
-        (
-          /** @type {any} */ _dep,
-          /** @type {any} */ _ctx,
-          /** @type {any} */ _info
-        ) => {}
-  }
-  /**
-   * Adds a function that runs whenever a dependency is successfully executed
-   * @typedef {{onStarted:number, error: Error|undefined}} ExecInfo
-   * @param {(arg0: Dependency, arg1: Context, arg2: ExecInfo) => void} func
-   * @return {this}
-   */
-  onSuccessRun(func) {
-    this.successRun = func
-    return this
-  }
-  /**
-   * Adds a function that runs whenever a dependency throws an exception
-   * @param {(arg0: Dependency, arg1: Context, arg2: ExecInfo) => void} func
-   * @return {this}
-   */
-  onFailRun(func) {
-    this.failRun = func
-    return this
-  }
-  /**
-   * Adds a function that runs whenever a dependency is successfully shutdown
-   * @param {(arg0: Dependency, arg1: Context, arg2: ExecInfo) => void} func
-   * @return {this}
-   */
-  onSuccessShutdown(func) {
-    this.successShutdown = func
-    return this
-  }
-  /**
-   * Adds a function that runs whenever a dependency fails to shutdown
-   * @param {(arg0: Dependency, arg1: Context, arg2: ExecInfo) => void} func
-   * @return {this}
-   */
-  onFailShutdown(func) {
-    this.failShutdown = func
-    return this
-  }
-  /**
-   * Adds a function that runs whenever a dependency is successfully reset
-   * @param {(arg0: Dependency, arg1: Context, arg2: ExecInfo) => void} func
-   * @return {this}
-   */
-  onSuccessReset(func) {
-    this.successReset = func
-    return this
-  }
-  /**
-   * Adds a function that runs whenever a dependency fails to reset
-   * @param {(arg0: Dependency, arg1: Context, arg2: ExecInfo) => void} func
-   * @return {this}
-   */
-  onFailReset(func) {
-    this.failReset = func
-    return this
   }
   /**
    * @package
@@ -431,16 +385,28 @@ class Context {
    */
   shutdown() {
     return this._execInverse((d) => {
-      const startedOn = performance.now()
+      const timeStart = performance.now()
       const shutdownPromise = d.shutdown()
       shutdownPromise
-        .then(
-          (/** @type {boolean} */ hasShutdown) =>
-            hasShutdown && this.successShutdown(d, this, { startedOn })
-        )
-        .catch((/** @type {Error} */ error) =>
-          this.failShutdown(d, this, { error, startedOn })
-        )
+        .then((/** @type {boolean} */ hasShutdown) => {
+          const info = {
+            timeStart,
+            timeEnd: performance.now(),
+            context: this,
+            dependency: d,
+          }
+          hasShutdown && this.emit(CONTEXT_EVENTS.SUCCESS_SHUTDOWN, info)
+        })
+        .catch((/** @type {Error} */ error) => {
+          const info = {
+            timeStart,
+            timeEnd: performance.now(),
+            context: this,
+            dependency: d,
+            error,
+          }
+          this.emit(CONTEXT_EVENTS.FAIL_SHUTDOWN, info)
+        })
       return shutdownPromise
     })
   }
@@ -450,49 +416,80 @@ class Context {
    */
   reset() {
     return this._execInverse((d) => {
-      const startedOn = performance.now()
+      const timeStart = performance.now()
       const resetPromise = d.reset()
       resetPromise
-        .then(
-          (/** @type {boolean} */ hasShutdown) =>
-            hasShutdown && this.successReset(d, this, { startedOn })
-        )
-        .catch((/** @type {Error} */ error) =>
-          this.failReset(d, this, { error, startedOn })
-        )
+        .then((/** @type {boolean} */ hasReset) => {
+          const info = {
+            timeStart,
+            timeEnd: performance.now(),
+            context: this,
+            dependency: d,
+          }
+          hasReset && this.emit(CONTEXT_EVENTS.SUCCESS_RESET, info)
+        })
+        .catch((/** @type {Error} */ error) => {
+          const info = {
+            timeStart,
+            timeEnd: performance.now(),
+            context: this,
+            dependency: d,
+            error,
+          }
+          this.emit(CONTEXT_EVENTS.FAIL_RESET, info)
+        })
       return resetPromise
     })
   }
 }
 
-const defaultContext = new Context("Default context")
 /**
  * It runs one or more dependencies
  * All the dependencies are executed only once and in the correct order
- * @param {Dependency|Array<Dependency>} dep - one or more dependencies
+ * @param {Dependency|string|Array<Dependency|string>} dep - one or more dependencies
  * @param {Object|Map<string|Dependency, any>|Array<[string|Dependency, any]>} [params] - parameters. This can also be used to mock a dependency (using a Map)
  * @param {Context | undefined} [context] - Optional context
  * @return {Promise}
  */
 function run(dep, params = {}, context) {
   const _cache = paramsToMap(params)
+  const timings = []
+  _cache.set(DEPENDENCY_TIMINGS, timings)
 
-  const getPromiseFromDep = (dep) => {
+  const getPromiseFromDep = (/** @type {Dependency|ValueDependency} */ dep) => {
     if (context != null && dep instanceof Dependency) {
       context.add(dep)
     }
     return Promise.resolve().then(() => {
       if (!_cache.has(dep.id)) {
-        let startedOn
+        let timeStart
         const valuePromise = getPromisesFromDeps(dep.deps()).then((deps) => {
-          startedOn = performance.now()
+          timeStart = performance.now()
           return dep.getValue(...deps)
         })
         if (context != null) {
           valuePromise
-            .then(() => context.successRun(dep, context, { startedOn }))
+            .then(() => {
+              const info = {
+                timeStart,
+                timeEnd: performance.now(),
+                context,
+                dependency: dep,
+              }
+              timings.push(info)
+              context.emit(CONTEXT_EVENTS.SUCCESS_RUN, info)
+            })
             .catch((error) => {
-              context.failRun(dep, context, { error, startedOn })
+              const info = {
+                timeStart,
+                timeEnd: performance.now(),
+                context,
+                dependency: dep,
+                error,
+              }
+              // no point, the timings won't return
+              // timings.push(info)
+              context.emit(CONTEXT_EVENTS.FAIL_RUN, info)
             })
         }
         _cache.set(dep.id, valuePromise)
@@ -500,9 +497,13 @@ function run(dep, params = {}, context) {
       return _cache.get(dep.id)
     })
   }
-  const getPromisesFromDeps = (deps) => Promise.all(deps.map(getPromiseFromDep))
+  const getPromisesFromDeps = (
+    /** @type {(Dependency | ValueDependency)[]} */ deps
+  ) => Promise.all(deps.map(getPromiseFromDep))
 
-  return Array.isArray(dep) ? getPromisesFromDeps(dep) : getPromiseFromDep(dep)
+  return Array.isArray(dep)
+    ? getPromisesFromDeps(dep.map(getDependencyOrValueDependency))
+    : getPromiseFromDep(getDependencyOrValueDependency(dep))
 }
 
 module.exports = {
@@ -510,4 +511,6 @@ module.exports = {
   ResourceDependency,
   Context,
   run,
+  CONTEXT_EVENTS,
+  DEPENDENCY_TIMINGS,
 }

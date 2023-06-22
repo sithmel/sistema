@@ -42,7 +42,7 @@ The return value of run is always a promise.
 
 ## Parameters
 
-A dependency can take parameters, these are expressed as strings:
+A dependency can take parameters, these are expressed as strings (or Symbol):
 
 ```js
 const userQuery = new Dependency()
@@ -116,7 +116,7 @@ await dbConnection.reset()
 ```
 
 A Dependency shuts down when there are no in-flights calls to the function provided.
-A ResourceDependency shuts down when the dispose function returns.
+A ResourceDependency shuts down when the dispose function run its course.
 
 ## Multiple contexts
 
@@ -150,6 +150,9 @@ run(depA)
 # Observability
 
 Sistema has some facility to help observe how the system works and to make it easier to debug and log.
+
+## Names
+
 Both Dependency, ResourceDependency and Context, can have a descriptive name:
 
 ```js
@@ -162,11 +165,15 @@ That can be read in the name attribute:
 console.log(userQuery.name) // 'User query'
 ```
 
+## Context events
+
 A context can be configured with event handlers that are executed when a dependency is executed with success or fail. Same for the shutdown.
 
 ```js
+const { CONTEXT_EVENTS } = require("sistema")
+
 const context = new Context("main context")
-  .onSuccessRun((dep, ctx, info) => {
+  .on(CONTEXT_EVENTS.SUCCESS_RUN, (dep, ctx, info) => {
     // example: 'User query ran by the main context in 14 ms'
     console.log(
       `${dep.name} ran by the ${ctx.name} in ${
@@ -174,21 +181,21 @@ const context = new Context("main context")
       } ms`
     )
   })
-  .onFailRun((dep, ctx, info) => {
+  .on(CONTEXT_EVENTS.FAIL_RUN, (dep, ctx, info) => {
     console.log(
       `${dep.name} ran with Error (${opts.error.message}) by the ${
         ctx.name
       } in ${performance.now() - opts.startedOn} ms`
     )
   })
-  .onSuccessShutdown((dep, ctx, opts) => {
+  .on(CONTEXT_EVENTS.SUCCESS_SHUTDOWN, (dep, ctx, opts) => {
     console.log(
       `${dep.name} was shutdown by the ${ctx.name} in ${
         performance.now() - opts.startedOn
       } ms`
     )
   })
-  .onFailShutdown((dep, ctx, opts) => {
+  .on(CONTEXT_EVENTS.FAIL_SHUTDOWN((dep, ctx, opts) => {
     console.log(
       `${dep.name} was shutdown with Error (${opts.error.message}) by the ${
         ctx.name
@@ -197,7 +204,9 @@ const context = new Context("main context")
   })
 ```
 
-There is also _onSuccessReset_ and _onFailReset_
+There is also _CONTEXT_EVENTS.SUCCESS_RESET_ and _CONTEXT_EVENTS.FAIL_RESET_
+
+## Dependencies attributes
 
 Dependencies have extra attributes and methods that help with the debugging:
 
@@ -207,6 +216,28 @@ dep.toString() // returns "ResourceDependency Test"
 dep.getEdges() // returns the dependencies as an array
 dep.getInverseEdges() // returns all the dependents as an array
 ```
+
+## Dependency timings
+
+There is a special dependency that shows the execution order and timing of the dependencies executed before:
+
+```js
+const { DEPENDENCY_TIMINGS } = require("sistema")
+const [myDependencyValue, timings] = await run([
+  myDependency,
+  DEPENDENCY_TIMINGS,
+])
+```
+
+_timings_ is an array of objects.
+Every object has:
+
+- **context**: the context used
+- **dependency**: the dependency that was executed
+- **timeStart**: the time when the dependency started its execution
+- **timeEnd**: the time when the dependency ended its execution
+
+You can use DEPENDENCY_TIMINGS as a regular dependency as well.
 
 # Testability
 
