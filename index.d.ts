@@ -174,6 +174,7 @@ export namespace CONTEXT_EVENTS {
     let FAIL_RESET: string;
 }
 export const DEPENDENCY_TIMINGS: unique symbol;
+export const EXECUTION_ID: unique symbol;
 import AsyncStatus = require("./asyncstatus");
 /**
  * ValueDependency is a fake dependency that is expressed as "string"

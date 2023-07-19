@@ -6,6 +6,7 @@ const {
   Context,
   CONTEXT_EVENTS,
   DEPENDENCY_TIMINGS,
+  EXECUTION_ID,
 } = require("../index.js")
 
 const assert = require("assert")
@@ -436,7 +437,7 @@ describe("dependency", () => {
     })
   })
 
-  describe("context callback and _info_", () => {
+  describe("context callback and DEPENDENCY_TIMINGS", () => {
     let a, b, ctx
 
     beforeEach(() => {
@@ -561,6 +562,23 @@ describe("dependency", () => {
       } catch (e) {
         // we ignore the error so we let the assertion run
       }
+    })
+  })
+  describe("EXECUTION_ID", () => {
+    it("keep execution id consistent", async () => {
+      let id1, id2
+      const a = new Dependency()
+        .dependsOn(EXECUTION_ID)
+        .provides((/** @type {string} */ id) => {
+          id1 = id
+        })
+      const b = new Dependency()
+        .dependsOn(a, EXECUTION_ID)
+        .provides((/** @type {null} */ _a, /** @type {string} */ id) => {
+          id2 = id
+        })
+      await b.run()
+      assert.equal(id1, id2)
     })
   })
 })

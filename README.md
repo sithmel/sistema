@@ -217,7 +217,9 @@ dep.getEdges() // returns the dependencies as an array
 dep.getInverseEdges() // returns all the dependents as an array
 ```
 
-## Dependency timings
+## Special dependencies
+
+### Dependency timings
 
 There is a special dependency that shows the execution order and timing of the dependencies executed before:
 
@@ -238,6 +240,11 @@ Every object has:
 - **timeEnd**: the time when the dependency ended its execution
 
 You can use DEPENDENCY_TIMINGS as a regular dependency as well.
+
+## Execution id
+
+EXECUTION_ID is another special dependency that contains a consistent UUID in the execution of the dependency tree.
+This can be used, for example, to log all dependencies as a part of the single execution.
 
 # Testability
 

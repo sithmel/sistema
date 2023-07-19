@@ -1,9 +1,11 @@
 //@ts-check
 const { performance } = require("perf_hooks")
+const crypto = require("crypto")
 const { EventEmitter } = require("events")
 const AsyncStatus = require("./asyncstatus")
 
 const DEPENDENCY_TIMINGS = Symbol()
+const EXECUTION_ID = Symbol()
 /**
  * Enum for Dependency status
  * @readonly
@@ -455,6 +457,7 @@ function run(dep, params = {}, context) {
   const _cache = paramsToMap(params)
   const timings = []
   _cache.set(DEPENDENCY_TIMINGS, timings)
+  _cache.set(EXECUTION_ID, crypto.randomUUID())
 
   const getPromiseFromDep = (/** @type {Dependency|ValueDependency} */ dep) => {
     if (context != null && dep instanceof Dependency) {
@@ -513,4 +516,5 @@ module.exports = {
   run,
   CONTEXT_EVENTS,
   DEPENDENCY_TIMINGS,
+  EXECUTION_ID,
 }
