@@ -5,8 +5,8 @@ const {
   Dependency,
   Context,
   CONTEXT_EVENTS,
-  DEPENDENCY_TIMINGS,
-  EXECUTION_ID,
+  META_DEPENDENCY,
+  getAdjacencyList,
 } = require("../index.js")
 
 const assert = require("assert")
@@ -126,6 +126,11 @@ describe("dependency", () => {
       })
     })
 
+    it("must get the adjacency map excluding the parameters", () => {
+      const list = b.getAdjacencyList()
+      assert.deepEqual(list, [b, a])
+    })
+
     it("must pass the parameter", () =>
       b
         .run({ greeting: "hello" })
@@ -212,6 +217,14 @@ describe("dependency", () => {
         counter.d++
         return b + c + "D"
       })
+    })
+
+    it("must get the adjacency list", () => {
+      const list = d.getAdjacencyList()
+      assert.deepEqual(
+        list.map((d) => d.name),
+        ["d", "c", "b", "a"]
+      )
     })
 
     it("must return leftmost dep", () =>
@@ -478,35 +491,35 @@ describe("dependency", () => {
     })
 
     it("must show timings", async () => {
-      const [_, info] = await run([b, DEPENDENCY_TIMINGS], {}, ctx)
-      assert.equal(info.length, 2)
+      const [_, { timings }] = await run([b, META_DEPENDENCY], {}, ctx)
+      assert.equal(timings.length, 2)
 
-      assert.equal(info[0].context, ctx)
-      assert(info[0].timeStart > 0)
-      assert(info[0].timeEnd > 0)
-      assert.equal(info[0].dependency, a)
+      assert.equal(timings[0].context, ctx)
+      assert(timings[0].timeStart > 0)
+      assert(timings[0].timeEnd > 0)
+      assert.equal(timings[0].dependency, a)
 
-      assert.equal(info[1].context, ctx)
-      assert(info[1].timeStart > 0)
-      assert(info[1].timeEnd > 0)
-      assert.equal(info[1].dependency, b)
+      assert.equal(timings[1].context, ctx)
+      assert(timings[1].timeStart > 0)
+      assert(timings[1].timeEnd > 0)
+      assert.equal(timings[1].dependency, b)
     })
 
     it("must show timings when is a dependency", async () => {
       const c = new Dependency()
-        .dependsOn(b, DEPENDENCY_TIMINGS)
-        .provides((_b, info) => {
-          assert.equal(info.length, 2)
+        .dependsOn(b, META_DEPENDENCY)
+        .provides((_b, { timings }) => {
+          assert.equal(timings.length, 2)
 
-          assert.equal(info[0].context, ctx)
-          assert(info[0].timeStart > 0)
-          assert(info[0].timeEnd > 0)
-          assert.equal(info[0].dependency, a)
+          assert.equal(timings[0].context, ctx)
+          assert(timings[0].timeStart > 0)
+          assert(timings[0].timeEnd > 0)
+          assert.equal(timings[0].dependency, a)
 
-          assert.equal(info[1].context, ctx)
-          assert(info[1].timeStart > 0)
-          assert(info[1].timeEnd > 0)
-          assert.equal(info[1].dependency, b)
+          assert.equal(timings[1].context, ctx)
+          assert(timings[1].timeStart > 0)
+          assert(timings[1].timeEnd > 0)
+          assert.equal(timings[1].dependency, b)
         })
 
       return run(c, {}, ctx)
@@ -568,13 +581,13 @@ describe("dependency", () => {
     it("keep execution id consistent", async () => {
       let id1, id2
       const a = new Dependency()
-        .dependsOn(EXECUTION_ID)
-        .provides((/** @type {string} */ id) => {
+        .dependsOn(META_DEPENDENCY)
+        .provides(({ /** @type {string} */ id }) => {
           id1 = id
         })
       const b = new Dependency()
-        .dependsOn(a, EXECUTION_ID)
-        .provides((/** @type {null} */ _a, /** @type {string} */ id) => {
+        .dependsOn(a, META_DEPENDENCY)
+        .provides((/** @type {null} */ _a, { /** @type {string} */ id }) => {
           id2 = id
         })
       await b.run()

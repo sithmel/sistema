@@ -4,8 +4,7 @@ const crypto = require("crypto")
 const { EventEmitter } = require("events")
 const AsyncStatus = require("./asyncstatus")
 
-const DEPENDENCY_TIMINGS = Symbol()
-const EXECUTION_ID = Symbol()
+const META_DEPENDENCY = Symbol()
 /**
  * Enum for Dependency status
  * @readonly
@@ -136,6 +135,13 @@ class Dependency {
    */
   getEdges() {
     return this.edgesAndValues.filter((d) => d instanceof Dependency)
+  }
+  /**
+   * It returns a list with the dependencies connected
+   * @return {Array<Dependency, Array<Dependency>>}
+   */
+  getAdjacencyList() {
+    return getAdjacencyList(this)
   }
   /**
    * Returns all dependents
@@ -324,6 +330,13 @@ class Context extends EventEmitter {
     this.startedDependencies = new Set()
   }
   /**
+   * It returns a list with the dependencies connected
+   * @return {Array<Dependency, Array<Dependency>>}
+   */
+  getAdjacencyList() {
+    return getAdjacencyList(Array.from(this.startedDependencies))
+  }
+  /**
    * @package
    * @param {Dependency} dep
    */
@@ -448,16 +461,15 @@ class Context extends EventEmitter {
 /**
  * It runs one or more dependencies
  * All the dependencies are executed only once and in the correct order
- * @param {Dependency|string|Array<Dependency|string>} dep - one or more dependencies
- * @param {Object|Map<string|Dependency, any>|Array<[string|Dependency, any]>} [params] - parameters. This can also be used to mock a dependency (using a Map)
+ * @param {Dependency|string|Symbol|Array<Dependency|string|Symbol>} dep - one or more dependencies
+ * @param {Object|Map<string|Dependency|Symbol, any>|Array<[string|Dependency|Symbol, any]>} [params] - parameters. This can also be used to mock a dependency (using a Map)
  * @param {Context | undefined} [context] - Optional context
  * @return {Promise}
  */
 function run(dep, params = {}, context) {
   const _cache = paramsToMap(params)
-  const timings = []
-  _cache.set(DEPENDENCY_TIMINGS, timings)
-  _cache.set(EXECUTION_ID, crypto.randomUUID())
+  const meta = { id: crypto.randomUUID(), timings: [] }
+  _cache.set(META_DEPENDENCY, meta)
 
   const getPromiseFromDep = (/** @type {Dependency|ValueDependency} */ dep) => {
     if (context != null && dep instanceof Dependency) {
@@ -479,7 +491,7 @@ function run(dep, params = {}, context) {
                 context,
                 dependency: dep,
               }
-              timings.push(info)
+              meta.timings.push(info)
               context.emit(CONTEXT_EVENTS.SUCCESS_RUN, info)
             })
             .catch((error) => {
@@ -509,12 +521,32 @@ function run(dep, params = {}, context) {
     : getPromiseFromDep(getDependencyOrValueDependency(dep))
 }
 
+/**
+ * It returns a list with the dependencies connected
+ * @param {Dependency|Array<Dependency>} dep - one or more dependencies
+ * @return {Array<Dependency>}
+ */
+function getAdjacencyList(dep) {
+  const depsQueue = Array.isArray(dep) ? dep : [dep]
+  const adjSet = new Set()
+  while (depsQueue.length > 0) {
+    const dep = depsQueue.pop()
+    adjSet.add(dep)
+    for (const d of dep.getEdges()) {
+      if (!adjSet.has(d)) {
+        depsQueue.push(d)
+      }
+    }
+  }
+  return Array.from(adjSet)
+}
+
 module.exports = {
   Dependency,
   ResourceDependency,
   Context,
   run,
   CONTEXT_EVENTS,
-  DEPENDENCY_TIMINGS,
-  EXECUTION_ID,
+  META_DEPENDENCY,
+  getAdjacencyList,
 }

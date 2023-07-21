@@ -42,7 +42,7 @@ The return value of run is always a promise.
 
 ## Parameters
 
-A dependency can take parameters, these are expressed as strings (or Symbol):
+A dependency can take parameters, these are expressed as strings (or Symbols):
 
 ```js
 const userQuery = new Dependency()
@@ -217,17 +217,47 @@ dep.getEdges() // returns the dependencies as an array
 dep.getInverseEdges() // returns all the dependents as an array
 ```
 
-## Special dependencies
+## Adjacency list
 
-### Dependency timings
-
-There is a special dependency that shows the execution order and timing of the dependencies executed before:
+In case is required to have a list of all dependencies connected you can use `getAdjacencyList`.
 
 ```js
-const { DEPENDENCY_TIMINGS } = require("sistema")
-const [myDependencyValue, timings] = await run([
+const { getAdjancencyList } = require("sistema")
+const a = new Dependency()
+const b = new Dependency().dependsOn(a)
+const c = new Dependency().dependsOn(a, b)
+
+getAdjancencyList(a) // [a]
+getAdjancencyList(b) // [b, a]
+getAdjancencyList(c) // [c, b, a]
+```
+
+`getAdjancencyList` works also with an array of dependencies.
+Context and dependencies have a getAdjacencyList method.
+Dependency.prototype.getAdjacencyList is a shorthand to run getAdjancencyList with a single dependency.
+Context.prototype.getAdjacencyList returns all dependencies that have been executed so far in the context.
+Here is an example on how to use `getAdjancencyList` to print the adjacency list in JSON, for example:
+
+```js
+const adj = {}
+for (const d in dep.getAdjacencyList()) {
+  adj[d.name] = d.getEdges().map((d) => d.name)
+}
+console.log(JSON.stringify(adj))
+```
+
+## Meta dependency
+
+It is a special dependency that shows information about the execution:
+
+- **id**: a consistent UUID in the execution of the dependency tree
+- **timings**: the execution order and timing of the dependencies executed before
+
+```js
+const { META_DEPENDENCY } = require("sistema")
+const [myDependencyValue, { id, timings }] = await run([
   myDependency,
-  DEPENDENCY_TIMINGS,
+  META_DEPENDENCY,
 ])
 ```
 
@@ -239,12 +269,7 @@ Every object has:
 - **timeStart**: the time when the dependency started its execution
 - **timeEnd**: the time when the dependency ended its execution
 
-You can use DEPENDENCY_TIMINGS as a regular dependency as well.
-
-## Execution id
-
-EXECUTION_ID is another special dependency that contains a consistent UUID in the execution of the dependency tree.
-This can be used, for example, to log all dependencies as a part of the single execution.
+You can use META_DEPENDENCY as a regular dependency as well.
 
 # Testability
 

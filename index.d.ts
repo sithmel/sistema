@@ -41,6 +41,11 @@ export class Dependency {
      */
     getEdges(): Array<Dependency>;
     /**
+     * It returns a list with the dependencies connected
+     * @return {Array<Dependency, Array<Dependency>>}
+     */
+    getAdjacencyList(): Array<Dependency, Array<Dependency>>;
+    /**
      * Returns all dependents
      * @return {Array<Dependency>}
      */
@@ -112,6 +117,11 @@ export class Context extends EventEmitter {
     name: string;
     startedDependencies: Set<any>;
     /**
+     * It returns a list with the dependencies connected
+     * @return {Array<Dependency, Array<Dependency>>}
+     */
+    getAdjacencyList(): Array<Dependency, Array<Dependency>>;
+    /**
      * @package
      * @param {Dependency} dep
      */
@@ -155,12 +165,12 @@ export class Context extends EventEmitter {
 /**
  * It runs one or more dependencies
  * All the dependencies are executed only once and in the correct order
- * @param {Dependency|string|Array<Dependency|string>} dep - one or more dependencies
- * @param {Object|Map<string|Dependency, any>|Array<[string|Dependency, any]>} [params] - parameters. This can also be used to mock a dependency (using a Map)
+ * @param {Dependency|string|Symbol|Array<Dependency|string|Symbol>} dep - one or more dependencies
+ * @param {Object|Map<string|Dependency|Symbol, any>|Array<[string|Dependency|Symbol, any]>} [params] - parameters. This can also be used to mock a dependency (using a Map)
  * @param {Context | undefined} [context] - Optional context
  * @return {Promise}
  */
-export function run(dep: Dependency | string | Array<Dependency | string>, params?: any | Map<string | Dependency, any> | Array<[string | Dependency, any]>, context?: Context | undefined): Promise<any>;
+export function run(dep: Dependency | string | Symbol | Array<Dependency | string | Symbol>, params?: any | Map<string | Dependency | Symbol, any> | Array<[string | Dependency | Symbol, any]>, context?: Context | undefined): Promise<any>;
 /**
  * Enum context events
  */
@@ -173,8 +183,13 @@ export namespace CONTEXT_EVENTS {
     let SUCCESS_RESET: string;
     let FAIL_RESET: string;
 }
-export const DEPENDENCY_TIMINGS: unique symbol;
-export const EXECUTION_ID: unique symbol;
+export const META_DEPENDENCY: unique symbol;
+/**
+ * It returns a list with the dependencies connected
+ * @param {Dependency|Array<Dependency>} dep - one or more dependencies
+ * @return {Array<Dependency>}
+ */
+export function getAdjacencyList(dep: Dependency | Array<Dependency>): Array<Dependency>;
 import AsyncStatus = require("./asyncstatus");
 /**
  * ValueDependency is a fake dependency that is expressed as "string"
