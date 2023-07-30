@@ -184,6 +184,7 @@ export namespace CONTEXT_EVENTS {
     let FAIL_RESET: string;
 }
 export const META_DEPENDENCY: unique symbol;
+export const EXECUTION_ID: "_id";
 /**
  * It returns a list with the dependencies connected
  * @param {Dependency|Array<Dependency>} dep - one or more dependencies

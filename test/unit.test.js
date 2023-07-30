@@ -6,6 +6,7 @@ const {
   Context,
   CONTEXT_EVENTS,
   META_DEPENDENCY,
+  EXECUTION_ID,
   getAdjacencyList,
 } = require("../index.js")
 
@@ -578,19 +579,27 @@ describe("dependency", () => {
     })
   })
   describe("EXECUTION_ID", () => {
-    it("keep execution id consistent", async () => {
-      let id1, id2
-      const a = new Dependency()
-        .dependsOn(META_DEPENDENCY)
-        .provides(({ /** @type {string} */ id }) => {
+    let a, b, id1, id2
+    beforeEach(() => {
+      a = new Dependency()
+        .dependsOn(EXECUTION_ID)
+        .provides((/** @type {string} */ id) => {
           id1 = id
         })
-      const b = new Dependency()
-        .dependsOn(a, META_DEPENDENCY)
-        .provides((/** @type {null} */ _a, { /** @type {string} */ id }) => {
+      b = new Dependency()
+        .dependsOn(a, EXECUTION_ID)
+        .provides((/** @type {null} */ _a, /** @type {string} */ id) => {
           id2 = id
         })
+    })
+    it("keep execution id consistent", async () => {
       await b.run()
+      assert.notEqual(id1, undefined)
+      assert.equal(id1, id2)
+    })
+    it("can override EXECUTION_ID", async () => {
+      await b.run({ [EXECUTION_ID]: "abc" })
+      assert.equal(id1, "abc")
       assert.equal(id1, id2)
     })
   })

@@ -248,14 +248,11 @@ console.log(JSON.stringify(adj))
 
 ## Meta dependency
 
-It is a special dependency that shows information about the execution:
-
-- **id**: a consistent UUID in the execution of the dependency tree
-- **timings**: the execution order and timing of the dependencies executed before
+It is a special dependency that shows information about the execution. It contains a field **timings** with the execution order and timing of the dependencies executed before.
 
 ```js
 const { META_DEPENDENCY } = require("sistema")
-const [myDependencyValue, { id, timings }] = await run([
+const [myDependencyValue, { timings }] = await run([
   myDependency,
   META_DEPENDENCY,
 ])
@@ -270,6 +267,18 @@ Every object has:
 - **timeEnd**: the time when the dependency ended its execution
 
 You can use META_DEPENDENCY as a regular dependency as well.
+
+## Execution id
+
+You can use the execution id to keep the relation between all dependencies. By default is a UUID generated on each execution. But it can also be passed:
+
+```js
+const b = new Dependency().dependsOn(a, EXECUTION_ID).provides((a, id) => {
+  // ...
+})
+
+const [EXECUTION_ID] = await run({ [EXECUTION_ID]: "myid" })
+```
 
 # Testability
 

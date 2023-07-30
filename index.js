@@ -4,6 +4,7 @@ const crypto = require("crypto")
 const { EventEmitter } = require("events")
 const AsyncStatus = require("./asyncstatus")
 
+const EXECUTION_ID = "_id"
 const META_DEPENDENCY = Symbol()
 /**
  * Enum for Dependency status
@@ -468,7 +469,10 @@ class Context extends EventEmitter {
  */
 function run(dep, params = {}, context) {
   const _cache = paramsToMap(params)
-  const meta = { id: crypto.randomUUID(), timings: [] }
+  const id = _cache.get(EXECUTION_ID) ?? crypto.randomUUID()
+  _cache.set(EXECUTION_ID, id)
+
+  const meta = { timings: [] }
   _cache.set(META_DEPENDENCY, meta)
 
   const getPromiseFromDep = (/** @type {Dependency|ValueDependency} */ dep) => {
@@ -548,5 +552,6 @@ module.exports = {
   run,
   CONTEXT_EVENTS,
   META_DEPENDENCY,
+  EXECUTION_ID,
   getAdjacencyList,
 }
