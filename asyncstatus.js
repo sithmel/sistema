@@ -26,8 +26,8 @@ class AsyncStatus {
   }
   /**
    * @param {string} newStatus
-   * @param {Promise} promise
-   * @return {Promise}
+   * @param {Promise<any>} promise
+   * @return {Promise<any>}
    */
   change(newStatus, promise) {
     this.status = ""

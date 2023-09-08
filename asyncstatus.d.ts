@@ -1,4 +1,4 @@
-export = AsyncStatus
+export = AsyncStatus;
 /**
  * this object is a very simple async state machine
  * it works as follows:
@@ -7,21 +7,21 @@ export = AsyncStatus
  * status changes happen in a queue
  */
 declare class AsyncStatus {
-  /**
-   * @param {string} initialStatus
-   */
-  constructor(initialStatus: string)
-  status: string
-  changingStatus: any
-  /**
-   * @return {Promise<string>}
-   */
-  get(): Promise<string>
-  /**
-   * @param {string} newStatus
-   * @param {Promise} promise
-   * @return {Promise}
-   */
-  change(newStatus: string, promise: Promise<any>): Promise<any>
+    /**
+     * @param {string} initialStatus
+     */
+    constructor(initialStatus: string);
+    status: string;
+    changingStatus: any;
+    /**
+     * @return {Promise<string>}
+     */
+    get(): Promise<string>;
+    /**
+     * @param {string} newStatus
+     * @param {Promise<any>} promise
+     * @return {Promise<any>}
+     */
+    change(newStatus: string, promise: Promise<any>): Promise<any>;
 }
 //# sourceMappingURL=asyncstatus.d.ts.map
