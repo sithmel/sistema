@@ -9,10 +9,13 @@ export class Dependency {
      * @param {string | undefined} [name] - A description of the dependency
      */
     constructor(name?: string | undefined);
-    edgesAndValues: any[];
+    /**
+     * @type {Array<Dependency|ValueDependency>}
+     */
+    edgesAndValues: Array<Dependency | ValueDependency>;
     inverseEdges: Set<any>;
     id: this;
-    name: string;
+    name: string | undefined;
     _func: (..._args: any) => void;
     contextItems: Set<any>;
     startedFunctions: Set<any>;
@@ -27,7 +30,7 @@ export class Dependency {
      * Executes the function wrapping it in a promise
      * @package
      * @param {any[]} args
-     * @return {Promise}
+     * @return {Promise<any>}
      */
     getValue(...args: any[]): Promise<any>;
     /**
@@ -42,9 +45,9 @@ export class Dependency {
     getEdges(): Array<Dependency>;
     /**
      * It returns a list with the dependencies connected
-     * @return {Array<Dependency, Array<Dependency>>}
+     * @return {Array<Dependency>}
      */
-    getAdjacencyList(): Array<Dependency, Array<Dependency>>;
+    getAdjacencyList(): Array<Dependency>;
     /**
      * Returns all dependents
      * @return {Array<Dependency>}
@@ -55,9 +58,9 @@ export class Dependency {
      * The dependencies are executed at most once
      * @param {Object} [params]
      * @param {Context} [context]
-     * @return {Promise}
+     * @return {Promise<any>}
      */
-    run(params?: any, context?: Context): Promise<any>;
+    run(params?: Object | undefined, context?: Context | undefined): Promise<any>;
     /**
      * Dependencies can be listed here
      * A string will be used as parameter that
@@ -68,17 +71,17 @@ export class Dependency {
     dependsOn(...deps: (Dependency | string | Symbol)[]): this;
     /**
      * Add function that provides the dependency
-     * @param {() => any} func
+     * @param {(...args: any[]) => any} func
      * @return {this}
      */
-    provides(func: () => any): this;
+    provides(func: (...args: any[]) => any): this;
     /**
      * Shutdown or reset
      * @package
      * @param {string} newStatus
-     * @return {Promise}
+     * @return {Promise<boolean>}
      */
-    _shutdownOrReset(newStatus: string): Promise<any>;
+    _shutdownOrReset(newStatus: string): Promise<boolean>;
     /**
      * It shuts down the dependency and returns true if shutdown is executed
      * @return {Promise<boolean>}
@@ -95,7 +98,7 @@ export class Dependency {
  * For example a connection to a database.
  */
 export class ResourceDependency extends Dependency {
-    memo: Promise<any>;
+    memo: Promise<any> | undefined;
     stopFunc: () => void;
     /**
      * Add a function that is used to shutdown the dependency
@@ -114,13 +117,13 @@ export class Context extends EventEmitter {
      * @param {string | undefined} [name] - A description of the context
      */
     constructor(name?: string | undefined);
-    name: string;
+    name: string | undefined;
     startedDependencies: Set<any>;
     /**
      * It returns a list with the dependencies connected
-     * @return {Array<Dependency, Array<Dependency>>}
+     * @return {Array<Dependency>}
      */
-    getAdjacencyList(): Array<Dependency, Array<Dependency>>;
+    getAdjacencyList(): Array<Dependency>;
     /**
      * @package
      * @param {Dependency} dep
@@ -148,19 +151,20 @@ export class Context extends EventEmitter {
     getFirst(): Dependency;
     /**
      * @package
-     * @param {(arg0: Dependency) => Promise} func
+     * @param {(arg0: Dependency) => Promise<any>} func
+     * @return {Promise<void>}
      */
-    _execInverse(func: (arg0: Dependency) => Promise<any>): any;
+    _execInverse(func: (arg0: Dependency) => Promise<any>): Promise<void>;
     /**
      * Shuts down all dependencies that are part of this context in the inverse topological order
-     * @return {Promise}
+     * @return {Promise<void>}
      */
-    shutdown(): Promise<any>;
+    shutdown(): Promise<void>;
     /**
      * reset dependencies that are part of this context in the inverse topological order
-     * @return {Promise}
+     * @return {Promise<void>}
      */
-    reset(): Promise<any>;
+    reset(): Promise<void>;
 }
 /**
  * It runs one or more dependencies
@@ -168,9 +172,9 @@ export class Context extends EventEmitter {
  * @param {Dependency|string|Symbol|Array<Dependency|string|Symbol>} dep - one or more dependencies
  * @param {Object|Map<string|Dependency|Symbol, any>|Array<[string|Dependency|Symbol, any]>} [params] - parameters. This can also be used to mock a dependency (using a Map)
  * @param {Context | undefined} [context] - Optional context
- * @return {Promise}
+ * @return {Promise<any>}
  */
-export function run(dep: Dependency | string | Symbol | Array<Dependency | string | Symbol>, params?: any | Map<string | Dependency | Symbol, any> | Array<[string | Dependency | Symbol, any]>, context?: Context | undefined): Promise<any>;
+export function run(dep: Dependency | string | Symbol | Array<Dependency | string | Symbol>, params?: Object | Map<string | Symbol | Dependency, any> | [string | Symbol | Dependency, any][] | undefined, context?: Context | undefined): Promise<any>;
 /**
  * Enum context events
  */
@@ -191,7 +195,6 @@ export const EXECUTION_ID: "_id";
  * @return {Array<Dependency>}
  */
 export function getAdjacencyList(dep: Dependency | Array<Dependency>): Array<Dependency>;
-import AsyncStatus = require("./asyncstatus");
 /**
  * ValueDependency is a fake dependency that is expressed as "string"
  * it throws an error when executed because it should always be passed
@@ -213,6 +216,7 @@ declare class ValueDependency {
      */
     deps(): Array<Dependency | ValueDependency>;
 }
+import AsyncStatus = require("./asyncstatus");
 import { EventEmitter } from "events";
 export {};
 //# sourceMappingURL=index.d.ts.map

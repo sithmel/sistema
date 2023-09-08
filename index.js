@@ -31,6 +31,20 @@ const CONTEXT_EVENTS = {
 }
 
 /**
+ * @param {Array<Dependency|ValueDependency>} depsOrValueDeps
+ * @returns {Array<Dependency>}
+ */
+function filterDependency(depsOrValueDeps) {
+  const deps = []
+  for (const d of depsOrValueDeps) {
+    if (d instanceof Dependency) {
+      deps.push(d)
+    }
+  }
+  return deps
+}
+
+/**
  * @param {string|Dependency|Symbol} d
  * @returns {Dependency|ValueDependency}
  */
@@ -81,6 +95,9 @@ class Dependency {
    * @param {string | undefined} [name] - A description of the dependency
    */
   constructor(name) {
+    /**
+     * @type {Array<Dependency|ValueDependency>}
+     */
     this.edgesAndValues = []
     this.inverseEdges = new Set()
 
@@ -104,7 +121,7 @@ class Dependency {
    * Executes the function wrapping it in a promise
    * @package
    * @param {any[]} args
-   * @return {Promise}
+   * @return {Promise<any>}
    */
   async getValue(...args) {
     const status = await this.status.get()
@@ -135,11 +152,11 @@ class Dependency {
    * @return {Array<Dependency>}
    */
   getEdges() {
-    return this.edgesAndValues.filter((d) => d instanceof Dependency)
+    return filterDependency(this.edgesAndValues)
   }
   /**
    * It returns a list with the dependencies connected
-   * @return {Array<Dependency, Array<Dependency>>}
+   * @return {Array<Dependency>}
    */
   getAdjacencyList() {
     return getAdjacencyList(this)
@@ -156,7 +173,7 @@ class Dependency {
    * The dependencies are executed at most once
    * @param {Object} [params]
    * @param {Context} [context]
-   * @return {Promise}
+   * @return {Promise<any>}
    */
   run(params, context) {
     return run(this, params, context)
@@ -171,16 +188,14 @@ class Dependency {
    */
   dependsOn(...deps) {
     this.edgesAndValues = deps.map(getDependencyOrValueDependency)
-    this.edgesAndValues
-      .filter((d) => d instanceof Dependency)
-      .forEach((d) => {
-        d.inverseEdges.add(this)
-      })
+    this.getEdges().forEach((d) => {
+      d.inverseEdges.add(this)
+    })
     return this
   }
   /**
    * Add function that provides the dependency
-   * @param {() => any} func
+   * @param {(...args: any[]) => any} func
    * @return {this}
    */
   provides(func) {
@@ -191,7 +206,7 @@ class Dependency {
    * Shutdown or reset
    * @package
    * @param {string} newStatus
-   * @return {Promise}
+   * @return {Promise<boolean>}
    */
   async _shutdownOrReset(newStatus) {
     const currentStatus = await this.status.get()
@@ -269,7 +284,7 @@ class ResourceDependency extends Dependency {
   /**
    * Shutdown or reset
    * @param {string} newStatus
-   * @return {Promise}
+   * @return {Promise<boolean>}
    */
   async _shutdownOrReset(newStatus) {
     const currentStatus = await this.status.get()
@@ -299,7 +314,7 @@ class ResourceDependency extends Dependency {
 
 /**
  * Utility function to convert parameters in a Map
- * @param {Object<string, any>|Map<string|Dependency, any>|Iterable<string|Dependency, any>} obj
+ * @param {Object<string, any>|Map<string|Dependency, any>|Iterable<[string|Dependency, any]>} obj
  */
 function paramsToMap(obj) {
   if (obj instanceof Map) {
@@ -332,7 +347,7 @@ class Context extends EventEmitter {
   }
   /**
    * It returns a list with the dependencies connected
-   * @return {Array<Dependency, Array<Dependency>>}
+   * @return {Array<Dependency>}
    */
   getAdjacencyList() {
     return getAdjacencyList(Array.from(this.startedDependencies))
@@ -377,7 +392,8 @@ class Context extends EventEmitter {
 
   /**
    * @package
-   * @param {(arg0: Dependency) => Promise} func
+   * @param {(arg0: Dependency) => Promise<any>} func
+   * @return {Promise<void>}
    */
   _execInverse(func) {
     if (this.size() === 0) {
@@ -397,7 +413,7 @@ class Context extends EventEmitter {
   }
   /**
    * Shuts down all dependencies that are part of this context in the inverse topological order
-   * @return {Promise}
+   * @return {Promise<void>}
    */
   shutdown() {
     return this._execInverse((d) => {
@@ -428,7 +444,7 @@ class Context extends EventEmitter {
   }
   /**
    * reset dependencies that are part of this context in the inverse topological order
-   * @return {Promise}
+   * @return {Promise<void>}
    */
   reset() {
     return this._execInverse((d) => {
@@ -465,14 +481,16 @@ class Context extends EventEmitter {
  * @param {Dependency|string|Symbol|Array<Dependency|string|Symbol>} dep - one or more dependencies
  * @param {Object|Map<string|Dependency|Symbol, any>|Array<[string|Dependency|Symbol, any]>} [params] - parameters. This can also be used to mock a dependency (using a Map)
  * @param {Context | undefined} [context] - Optional context
- * @return {Promise}
+ * @return {Promise<any>}
  */
 function run(dep, params = {}, context) {
   const _cache = paramsToMap(params)
   const id = _cache.get(EXECUTION_ID) ?? crypto.randomUUID()
   _cache.set(EXECUTION_ID, id)
 
-  const meta = { timings: [] }
+  /** @type Array<any> */
+  const timings = []
+  const meta = { timings }
   _cache.set(META_DEPENDENCY, meta)
 
   const getPromiseFromDep = (/** @type {Dependency|ValueDependency} */ dep) => {
@@ -481,6 +499,7 @@ function run(dep, params = {}, context) {
     }
     return Promise.resolve().then(() => {
       if (!_cache.has(dep.id)) {
+        /** @type number */
         let timeStart
         const valuePromise = getPromisesFromDeps(dep.deps()).then((deps) => {
           timeStart = performance.now()
@@ -535,6 +554,7 @@ function getAdjacencyList(dep) {
   const adjSet = new Set()
   while (depsQueue.length > 0) {
     const dep = depsQueue.pop()
+    if (dep == null) break // this is mostly to refine the type
     adjSet.add(dep)
     for (const d of dep.getEdges()) {
       if (!adjSet.has(d)) {

@@ -1,10 +1,10 @@
 # Sistema
 
-Sistema is a lightweight dependency injection library for node.js. It makes possible to write fast, testable and reliable applications.
+Sistema is a lightweight dependency injection library for node.js. It makes possible to write fast, testable and reliable applications (check these claims at the bottom).
 
 ## Dependency
 
-The core concept of sistema is the dependency:
+The core concept of sistema is the _dependency_:
 
 ```js
 const { Dependency } = require("sistema")
@@ -17,7 +17,7 @@ const dbConnection = new Dependency().provides(async () => {
 })
 ```
 
-A dependency runs a function and provides a value (optionally wrapped in a promise).
+A dependency runs a function and provides a value. The value could be either a regular function of a function returning a promise.
 
 A dependency can depend on other dependencies (just one in the example but they can be multiple!):
 
@@ -33,12 +33,11 @@ const usersQuery = new Dependency()
 A dependency is executed with the **run** method:
 
 ```js
-usersQuery.run().then((rows) => {
-  rows.forEach((row) => console.log(row))
-})
+const rows = await usersQuery.run()
+rows.forEach((row) => console.log(row))
 ```
 
-The return value of run is always a promise.
+The return value of _run_ is always a promise.
 
 ## Parameters
 
@@ -55,7 +54,7 @@ const userQuery = new Dependency()
   })
 ```
 
-and must be passed as objects in the run method.
+and must be passed in the run method as object values.
 
 ```js
 await userQuery.run({ userId: 12345 })
@@ -63,7 +62,9 @@ await userQuery.run({ userId: 12345 })
 
 ## ResourceDependencies and context
 
-In the previous example we open a database connection every time we need a dbConnection. Dependencies like that should behave like _resources_: they are created once, used as many times as needed and then disposed (for example closing the database connection). They are called resourceDependencies:
+In the previous example we opened a database connection every time we needed a dbConnection.
+Dependencies like that should behave like _resources_: they are created once, used as many times as needed and then disposed (for example closing the database connection).
+We call them _ResourceDependencies_:
 
 ```js
 const { ResourceDependency } = require("sistema")
@@ -82,7 +83,7 @@ const dbConnection = new ResourceDependency()
   })
 ```
 
-This way we can run the function like before. The connection is established only the first time and reused across multiple usages of run. We can then close the connection using shutdown.
+This way the connection is established only the first time and reused across multiple usages of run. We can then close the connection using shutdown.
 
 ```js
 await userQuery.run({ userId: 12345 })
@@ -99,10 +100,10 @@ const context = new Context()
 
 await userQuery.run({ userId: 12345 }, context)
 // ...
-await context.shutdown() // this shuts down all Dependency that have been executed in the same context
+await context.shutdown() // this shuts down all dependencies that have been executed in the same context
 ```
 
-Once a Dependency or a ResourceDependency are shut down, they no longer work and return an exception when called.
+Once a _Dependency_ or a _ResourceDependency_ are shut down, they no longer work and return an exception when called.
 It is possible to reset a graph of dependencies so that all ResourceDependencies are closed (their "dispose" function is called), but they can still be used and recreated.
 
 ```js
@@ -120,8 +121,8 @@ A ResourceDependency shuts down when the dispose function run its course.
 
 ## Multiple contexts
 
-When dealing with dependencies that are part of different lifecycle you can use more than one context.
-So that shutting down (or resetting) a group of dependencies doesn't shut down another group.
+When dealing with dependencies that are part of different lifecycles you can use more than one context.
+So that shutting down (or resetting) a group of dependencies doesn't shut down dependencies that are used in another context.
 If a dependency belongs to multiple groups, it can only shutdown after all groups shut down.
 
 ## Run multiple dependencies at once
@@ -149,7 +150,7 @@ run(depA)
 
 # Observability
 
-Sistema has some facility to help observe how the system works and to make it easier to debug and log.
+Sistema has some facility to help observe how the system works and to make debugging and loggin easier.
 
 ## Names
 
@@ -173,35 +174,47 @@ A context can be configured with event handlers that are executed when a depende
 const { CONTEXT_EVENTS } = require("sistema")
 
 const context = new Context("main context")
-  .on(CONTEXT_EVENTS.SUCCESS_RUN, (dep, ctx, info) => {
-    // example: 'User query ran by the main context in 14 ms'
-    console.log(
-      `${dep.name} ran by the ${ctx.name} in ${
-        performance.now() - opts.startedOn
-      } ms`
-    )
-  })
-  .on(CONTEXT_EVENTS.FAIL_RUN, (dep, ctx, info) => {
-    console.log(
-      `${dep.name} ran with Error (${opts.error.message}) by the ${
-        ctx.name
-      } in ${performance.now() - opts.startedOn} ms`
-    )
-  })
-  .on(CONTEXT_EVENTS.SUCCESS_SHUTDOWN, (dep, ctx, opts) => {
-    console.log(
-      `${dep.name} was shutdown by the ${ctx.name} in ${
-        performance.now() - opts.startedOn
-      } ms`
-    )
-  })
-  .on(CONTEXT_EVENTS.FAIL_SHUTDOWN((dep, ctx, opts) => {
-    console.log(
-      `${dep.name} was shutdown with Error (${opts.error.message}) by the ${
-        ctx.name
-      } in ${performance.now() - opts.startedOn} ms`
-    )
-  })
+  .on(
+    CONTEXT_EVENTS.SUCCESS_RUN,
+    ({ dependency, context, timeStart, timeEnd }) => {
+      // example: 'User query ran by the main context in 14 ms'
+      console.log(
+        `${dependency.name} ran by the ${context.name} in ${
+          timeEnd - timeStart
+        } ms`
+      )
+    }
+  )
+  .on(
+    CONTEXT_EVENTS.FAIL_RUN,
+    ({ dependency, context, timeStart, timeEnd, error }) => {
+      console.log(
+        `${dependency.name} ran with Error (${error.message}) by the ${
+          context.name
+        } in ${timeEnd - timeStart} ms`
+      )
+    }
+  )
+  .on(
+    CONTEXT_EVENTS.SUCCESS_SHUTDOWN,
+    ({ dependency, context, timeStart, timeEnd }) => {
+      console.log(
+        `${dependency.name} was shutdown by the ${context.name} in ${
+          timeEnd - timeStart
+        } ms`
+      )
+    }
+  )
+  .on(
+    CONTEXT_EVENTS.FAIL_SHUTDOWN,
+    ({ dependency, context, timeStart, timeEnd, error }) => {
+      console.log(
+        `${dependency.name} was shutdown with Error (${error.message}) by the ${
+          context.name
+        } in ${timeEnd - timeStart} ms`
+      )
+    }
+  )
 ```
 
 There is also _CONTEXT_EVENTS.SUCCESS_RESET_ and _CONTEXT_EVENTS.FAIL_RESET_
@@ -234,8 +247,8 @@ getAdjancencyList(c) // [c, b, a]
 
 `getAdjancencyList` works also with an array of dependencies.
 Context and dependencies have a getAdjacencyList method.
-Dependency.prototype.getAdjacencyList is a shorthand to run getAdjancencyList with a single dependency.
-Context.prototype.getAdjacencyList returns all dependencies that have been executed so far in the context.
+`Dependency.prototype.getAdjacencyList` is a shorthand to run getAdjancencyList with a single dependency.
+`Context.prototype.getAdjacencyList` returns all dependencies that have been executed so far in the context.
 Here is an example on how to use `getAdjancencyList` to print the adjacency list in JSON, for example:
 
 ```js
@@ -282,7 +295,7 @@ const [EXECUTION_ID] = await run({ [EXECUTION_ID]: "myid" })
 
 # Testability
 
-With sistema we can test a dependency mocking easily any dependency. Just passing it in the run method using a Map:
+Mocking a dependency is super easy. Just pass it in the run method using a Map:
 
 ```js
 const args = new Map([
@@ -308,12 +321,3 @@ Sistema is:
 - FAST: dependencies are executed in parallel, in the optimal order and only once every execution
 - TESTABLE: Sistema takes care of the wiring, so that dependencies can be tested in isolation
 - RELIABLE: Sistema takes care of shutting dependencies in the right order
-
-## How it differs from Systemic
-
-I enjoyed using [Systemic](https://github.com/onebeyond/systemic) and its predecessor [electrician](https://github.com/tes/electrician) for a long time. _Sistema_ differs in a few key aspects:
-
-- With Sistema you can define a dependency in an external package, **including its dependencies**. This is not possible with Systemic, because it uses a centralised dependencies registry that needs to be defined in the application
-- Sistema uses references instead of strings to define a dependency. This prevents typos and makes not possible to define cyclic dependencies that would reveal themselves only at runtime
-- Sistema runs all dependencies in parallel, instead of doing that in series. Same with shutting down.
-- Sistema can be used to define all kind of dependencies, not just the ones necessaries to start the application
