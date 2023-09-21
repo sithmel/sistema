@@ -8,6 +8,7 @@ const {
   META_DEPENDENCY,
   EXECUTION_ID,
   getAdjacencyList,
+  defaultContext,
 } = require("../index.js")
 
 const assert = require("assert")
@@ -304,9 +305,8 @@ describe("dependency", () => {
 
       await delay(1)
 
-      await a.shutdown().then(() => {
-        assert.equal(counterStop, 1)
-      })
+      await defaultContext.shutdown()
+      assert.equal(counterStop, 1)
       try {
         await a.run()
         throw new Error("Oh no!")
@@ -352,7 +352,7 @@ describe("dependency", () => {
 
       await delay(1)
 
-      await a.shutdown().then(() => {
+      await defaultContext.shutdown().then(() => {
         assert.equal(counterRun, 3)
       })
       try {

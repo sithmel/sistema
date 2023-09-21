@@ -83,10 +83,11 @@ export class Dependency {
      */
     _shutdownOrReset(newStatus: string): Promise<boolean>;
     /**
+     * @package
      * It shuts down the dependency and returns true if shutdown is executed
      * @return {Promise<boolean>}
      */
-    shutdown(): Promise<boolean>;
+    _shutdown(): Promise<boolean>;
     /**
      * It reset the dependency
      * @return {Promise<boolean>}
@@ -195,6 +196,7 @@ export const EXECUTION_ID: "_id";
  * @return {Array<Dependency>}
  */
 export function getAdjacencyList(dep: Dependency | Array<Dependency>): Array<Dependency>;
+export const defaultContext: Context;
 /**
  * ValueDependency is a fake dependency that is expressed as "string"
  * it throws an error when executed because it should always be passed

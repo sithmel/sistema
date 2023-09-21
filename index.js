@@ -226,10 +226,11 @@ class Dependency {
   }
 
   /**
+   * @package
    * It shuts down the dependency and returns true if shutdown is executed
    * @return {Promise<boolean>}
    */
-  async shutdown() {
+  async _shutdown() {
     return this._shutdownOrReset(DEPENDENCY_STATUS.SHUTDOWN)
   }
   /**
@@ -418,7 +419,7 @@ class Context extends EventEmitter {
   shutdown() {
     return this._execInverse((d) => {
       const timeStart = performance.now()
-      const shutdownPromise = d.shutdown()
+      const shutdownPromise = d._shutdown()
       shutdownPromise
         .then((/** @type {boolean} */ hasShutdown) => {
           const info = {
@@ -475,6 +476,8 @@ class Context extends EventEmitter {
   }
 }
 
+const defaultContext = new Context("Default Context")
+
 /**
  * It runs one or more dependencies
  * All the dependencies are executed only once and in the correct order
@@ -483,7 +486,7 @@ class Context extends EventEmitter {
  * @param {Context | undefined} [context] - Optional context
  * @return {Promise<any>}
  */
-function run(dep, params = {}, context) {
+function run(dep, params = {}, context = defaultContext) {
   const _cache = paramsToMap(params)
   const id = _cache.get(EXECUTION_ID) ?? crypto.randomUUID()
   _cache.set(EXECUTION_ID, id)
@@ -494,7 +497,7 @@ function run(dep, params = {}, context) {
   _cache.set(META_DEPENDENCY, meta)
 
   const getPromiseFromDep = (/** @type {Dependency|ValueDependency} */ dep) => {
-    if (context != null && dep instanceof Dependency) {
+    if (dep instanceof Dependency) {
       context.add(dep)
     }
     return Promise.resolve().then(() => {
@@ -505,31 +508,29 @@ function run(dep, params = {}, context) {
           timeStart = performance.now()
           return dep.getValue(...deps)
         })
-        if (context != null) {
-          valuePromise
-            .then(() => {
-              const info = {
-                timeStart,
-                timeEnd: performance.now(),
-                context,
-                dependency: dep,
-              }
-              meta.timings.push(info)
-              context.emit(CONTEXT_EVENTS.SUCCESS_RUN, info)
-            })
-            .catch((error) => {
-              const info = {
-                timeStart,
-                timeEnd: performance.now(),
-                context,
-                dependency: dep,
-                error,
-              }
-              // no point, the timings won't return
-              // timings.push(info)
-              context.emit(CONTEXT_EVENTS.FAIL_RUN, info)
-            })
-        }
+        valuePromise
+          .then(() => {
+            const info = {
+              timeStart,
+              timeEnd: performance.now(),
+              context,
+              dependency: dep,
+            }
+            meta.timings.push(info)
+            context.emit(CONTEXT_EVENTS.SUCCESS_RUN, info)
+          })
+          .catch((error) => {
+            const info = {
+              timeStart,
+              timeEnd: performance.now(),
+              context,
+              dependency: dep,
+              error,
+            }
+            // no point, the timings won't return
+            // timings.push(info)
+            context.emit(CONTEXT_EVENTS.FAIL_RUN, info)
+          })
         _cache.set(dep.id, valuePromise)
       }
       return _cache.get(dep.id)
@@ -574,4 +575,5 @@ module.exports = {
   META_DEPENDENCY,
   EXECUTION_ID,
   getAdjacencyList,
+  defaultContext,
 }

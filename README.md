@@ -1,6 +1,6 @@
 # Sistema
 
-Sistema is a lightweight dependency injection library for node.js. It makes possible to write fast, testable and reliable applications (check these claims at the bottom).
+Sistema is a lightweight dependency injection library for node.js. It makes possible to write fast, testable, observable and reliable applications (check these claims at the bottom!).
 
 ## Dependency
 
@@ -63,7 +63,7 @@ await userQuery.run({ userId: 12345 })
 ## ResourceDependencies and context
 
 In the previous example we opened a database connection every time we needed a dbConnection.
-Dependencies like that should behave like _resources_: they are created once, used as many times as needed and then disposed (for example closing the database connection).
+Dependencies like that should behave like _resources_: they are created once, used as many times as needed and then disposed (closing a database connection, for example).
 We call them _ResourceDependencies_:
 
 ```js
@@ -83,47 +83,56 @@ const dbConnection = new ResourceDependency()
   })
 ```
 
-This way the connection is established only the first time and reused across multiple usages of run. We can then close the connection using shutdown.
+This way the connection is established only the first time and reused across multiple usages of run.
+
+The dependency/resourceDependency executions are preserved in an object called _defaultContext_. This exposes a method that allows to shutdown all dependencies in the right order.
 
 ```js
+const { defaultContext } = require("sistema")
+
 await userQuery.run({ userId: 12345 })
 // ...
-await dbConnection.shutdown() // this returns true if the "dispose" function is executed
+await defaultContext.shutdown() // this shuts down all dependencies that have been executed in the default context
 ```
 
-It is often more practical to keep track of all dependencies executed and shut them down using a single command (and in the right order). We do that passing a context to _run_:
+The shutdown respects the order in which dependencies are connected so for example, we ensure that all queries to a database are through before closing the db connection.
 
-```js
-const { Context } = require("sistema")
-
-const context = new Context()
-
-await userQuery.run({ userId: 12345 }, context)
-// ...
-await context.shutdown() // this shuts down all dependencies that have been executed in the same context
-```
+- A Dependency shuts down when there are no in-flights calls to the function provided.
+- A ResourceDependency shuts down when the dispose function ran its course.
 
 Once a _Dependency_ or a _ResourceDependency_ are shut down, they no longer work and return an exception when called.
+
+## Reset
+
 It is possible to reset a graph of dependencies so that all ResourceDependencies are closed (their "dispose" function is called), but they can still be used and recreated.
 
 ```js
-await context.reset()
+await defaultContext.reset()
 ```
 
-_Reset_ can be called on an individual dependency as well:
+_Reset_ can be called on an individual resourceDependency as well:
 
 ```js
 await dbConnection.reset()
 ```
 
-A Dependency shuts down when there are no in-flights calls to the function provided.
-A ResourceDependency shuts down when the dispose function run its course.
-
 ## Multiple contexts
 
 When dealing with dependencies that are part of different lifecycles you can use more than one context.
 So that shutting down (or resetting) a group of dependencies doesn't shut down dependencies that are used in another context.
-If a dependency belongs to multiple groups, it can only shutdown after all groups shut down.
+The new context need to be passed to _run_:
+
+```js
+const { Context } = require("sistema")
+
+const customContext = new Context()
+
+await userQuery.run({ userId: 12345 }, customContext)
+// ...
+await customContext.shutdown() // this shuts down all dependencies that have been executed in customContext
+```
+
+If a dependency belongs to multiple context, it is only shutdown after all context it belongs shut down.
 
 ## Run multiple dependencies at once
 
@@ -150,7 +159,7 @@ run(depA)
 
 # Observability
 
-Sistema has some facility to help observe how the system works and to make debugging and loggin easier.
+Sistema has some facility to help observe how the system works and to make debugging and logging easier.
 
 ## Names
 
@@ -168,7 +177,7 @@ console.log(userQuery.name) // 'User query'
 
 ## Context events
 
-A context can be configured with event handlers that are executed when a dependency is executed with success or fail. Same for the shutdown.
+A context can be configured with event handlers that are executed when a dependency is executed with success or fail. Same for the shutdown and reset.
 
 ```js
 const { CONTEXT_EVENTS } = require("sistema")
@@ -195,29 +204,26 @@ const context = new Context("main context")
       )
     }
   )
-  .on(
-    CONTEXT_EVENTS.SUCCESS_SHUTDOWN,
-    ({ dependency, context, timeStart, timeEnd }) => {
-      console.log(
-        `${dependency.name} was shutdown by the ${context.name} in ${
-          timeEnd - timeStart
-        } ms`
-      )
-    }
-  )
-  .on(
-    CONTEXT_EVENTS.FAIL_SHUTDOWN,
-    ({ dependency, context, timeStart, timeEnd, error }) => {
-      console.log(
-        `${dependency.name} was shutdown with Error (${error.message}) by the ${
-          context.name
-        } in ${timeEnd - timeStart} ms`
-      )
-    }
-  )
 ```
 
-There is also _CONTEXT_EVENTS.SUCCESS_RESET_ and _CONTEXT_EVENTS.FAIL_RESET_
+It is also possible to add events to the defaultContext.
+Here is a list of the events:
+
+| Events           | Parameters                                     |
+| ---------------- | ---------------------------------------------- |
+| SUCCESS_RUN      | dependency, context, timeStart, timeEnd        |
+| FAIL_RUN         | dependency, context, timeStart, timeEnd, error |
+| SUCCESS_SHUTDOWN | dependency, context, timeStart, timeEnd        |
+| FAIL_SHUTDOWN    | dependency, context, timeStart, timeEnd, error |
+| SUCCESS_RESET    | dependency, context, timeStart, timeEnd        |
+| FAIL_RESET       | dependency, context, timeStart, timeEnd, error |
+
+And the parameters:
+
+- **dependency**: the dependency object
+- **context**: the context object
+- **timestart, timeEnd**: timeStamp when a dependency started/ended the process
+- **error**: the error thrown
 
 ## Dependencies attributes
 
@@ -295,6 +301,7 @@ const [EXECUTION_ID] = await run({ [EXECUTION_ID]: "myid" })
 
 # Testability
 
+Sistema improves the testability of the codebase because, taking care of wiring dependencies between them, it leaves simple dependencies that can be tested in isolation.
 Mocking a dependency is super easy. Just pass it in the run method using a Map:
 
 ```js
@@ -320,4 +327,5 @@ Sistema is:
 
 - FAST: dependencies are executed in parallel, in the optimal order and only once every execution
 - TESTABLE: Sistema takes care of the wiring, so that dependencies can be tested in isolation
+- OBSERVABLE: Sistema has simple entry points to add logging/tracking and makes [easy to inspect how the dependencies are connected](https://github.com/sithmel/sistema-lens)
 - RELIABLE: Sistema takes care of shutting dependencies in the right order
