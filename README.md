@@ -209,20 +209,21 @@ const context = new Context("main context")
 It is also possible to add events to the defaultContext.
 Here is a list of the events:
 
-| Events           | Parameters                                     |
-| ---------------- | ---------------------------------------------- |
-| SUCCESS_RUN      | dependency, context, timeStart, timeEnd        |
-| FAIL_RUN         | dependency, context, timeStart, timeEnd, error |
-| SUCCESS_SHUTDOWN | dependency, context, timeStart, timeEnd        |
-| FAIL_SHUTDOWN    | dependency, context, timeStart, timeEnd, error |
-| SUCCESS_RESET    | dependency, context, timeStart, timeEnd        |
-| FAIL_RESET       | dependency, context, timeStart, timeEnd, error |
+| Events           | Parameters                                                    |
+| ---------------- | ------------------------------------------------------------- |
+| SUCCESS_RUN      | dependency, context, timeStart, timeEnd, \_executionId        |
+| FAIL_RUN         | dependency, context, timeStart, timeEnd, \_executionId, error |
+| SUCCESS_SHUTDOWN | dependency, context, timeStart, timeEnd, \_executionId        |
+| FAIL_SHUTDOWN    | dependency, context, timeStart, timeEnd, \_executionId, error |
+| SUCCESS_RESET    | dependency, context, timeStart, timeEnd, \_executionId        |
+| FAIL_RESET       | dependency, context, timeStart, timeEnd, \_executionId, error |
 
 And the parameters:
 
 - **dependency**: the dependency object
 - **context**: the context object
 - **timestart, timeEnd**: timeStamp when a dependency started/ended the process
+- **\_executionId**: id that identifies a single run/shutdown/reset execution, that is unique within all dependencies involved
 - **error**: the error thrown
 
 ## Dependencies attributes
@@ -241,21 +242,21 @@ dep.getInverseEdges() // returns all the dependents as an array
 In case is required to have a list of all dependencies connected you can use `getAdjacencyList`.
 
 ```js
-const { getAdjancencyList } = require("sistema")
+const { getAdjacencyList } = require("sistema")
 const a = new Dependency()
 const b = new Dependency().dependsOn(a)
 const c = new Dependency().dependsOn(a, b)
 
-getAdjancencyList(a) // [a]
-getAdjancencyList(b) // [b, a]
-getAdjancencyList(c) // [c, b, a]
+getAdjacencyList(a) // [a]
+getAdjacencyList(b) // [b, a]
+getAdjacencyList(c) // [c, b, a]
 ```
 
-`getAdjancencyList` works also with an array of dependencies.
+`getAdjacencyList` works also with an array of dependencies.
 Context and dependencies have a getAdjacencyList method.
 `Dependency.prototype.getAdjacencyList` is a shorthand to run getAdjancencyList with a single dependency.
 `Context.prototype.getAdjacencyList` returns all dependencies that have been executed so far in the context.
-Here is an example on how to use `getAdjancencyList` to print the adjacency list in JSON, for example:
+Here is an example on how to use `getAdjacencyList` to print the adjacency list in JSON, for example:
 
 ```js
 const adj = {}
@@ -284,14 +285,16 @@ Every object has:
 - **dependency**: the dependency that was executed
 - **timeStart**: the time when the dependency started its execution
 - **timeEnd**: the time when the dependency ended its execution
-
-You can use META_DEPENDENCY as a regular dependency as well.
+- **\_executionId**: id that identifies a single run/shutdown/reset execution, that is unique within all dependencies involved
+  You can use META_DEPENDENCY as a regular dependency as well.
 
 ## Execution id
 
-You can use the execution id to keep the relation between all dependencies. By default is a UUID generated on each execution. But it can also be passed:
+You can use the execution id to keep the relation between all dependencies called when _run_ is invoked. By default is a UUID generated on each execution. But it can also be passed:
 
 ```js
+const { EXECUTION_ID } = require("sistema")
+
 const b = new Dependency().dependsOn(a, EXECUTION_ID).provides((a, id) => {
   // ...
 })
@@ -315,7 +318,87 @@ await userQuery.run(args)
 _connectionMock_ will be used instead of dbConnection.
 This can be used to mock some or even all of the dependencies in the dependency graph. To implement unit and integration tests.
 
-## Sistema Design principles
+# Sistema cookbook
+
+Collecting here some use cases and patterns.
+
+## Shutting down a server
+
+This is an example on how to listen to the signals and call shutdown on the defaultContext to ensure the application closes gracefully, without interrupting pending tasks.
+
+```js
+const { defaultContext } = require("sistema")
+const events = { SIGTERM: 0, SIGINT: 0, unhandledRejection: 1, error: 1 }
+
+console.log("Press CTRL+C to stop")
+
+Object.keys(events).forEach((name) => {
+  process.on(name, async (events) => {
+    await defaultContext.shutdown()
+    process.exit(events[name])
+  })
+})
+```
+
+## Warm up a resourceDependency
+
+All resource dependencies are invoked when requested and their result is cached for subsequent calls. This means, for example, that the database connection stored in a resource dependency is opened only the first time a query is called.
+If we prefer that this happens at the application start up we can run the resource dependency right after is defined:
+
+```js
+const { ResourceDependency } = require("sistema")
+const { Client } = require("pg")
+
+let client
+
+const dbConnection = new ResourceDependency()
+  .provides(async () => {
+    client = new Client()
+    // Connect to the PostgreSQL database
+    return client.connect()
+  })
+  .disposes(() => {
+    client.end()
+  })
+
+dbConnection.run() // no need to await!
+
+module.exports = dbConnection
+```
+
+## Add server timing header
+
+[Server timing](https://www.w3.org/TR/server-timing/) is an header that allows to send to the user agent (the browser) the time spent in different operations.
+It can be used to visualise the timing for the execution of the dependencies.
+
+```js
+function writeServerTiming(timings, res) {
+  const timingsString = timings
+    .map(
+      ({ dependency, timeStart, timeEnd }) =>
+        `${dependency.name};dur=${(timeEnd - timeStart).toFixed(2)}`
+    )
+    .join(",");
+  res.set("Server-Timing", timingsString);
+}
+...
+// example of express.js controller
+app.get("/test", async (req, res) => {
+  const [text, { timings }] = await run([myDependency, META_DEPENDENCY], {
+    req,
+    res,
+  });
+  writeServerTiming(timings, res);
+  res.send(text);
+});
+
+```
+
+## Visualise dependencies
+
+[Sistema lens](https://github.com/sithmel/sistema-lens) can be used to show graphically how dependencies are wired together and display further information. It is designed to make code base much easier to understand.
+
+# Sistema Design principles
 
 **Sistema** (Italian for "system") allows to express an application as a directed acyclic graph of functions. It executes the graphs of functions so that the dependencies constraint is respected. The algorithm is a derivative of DFS similar to [topological sorting](https://en.wikipedia.org/wiki/Topological_sorting) that walks multiple graph edges in parallel. In the same way is possible to shutdown the dependencies in the inverse order.
 

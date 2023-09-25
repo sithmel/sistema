@@ -4,8 +4,8 @@ const crypto = require("crypto")
 const { EventEmitter } = require("events")
 const AsyncStatus = require("./asyncstatus")
 
-const EXECUTION_ID = "_id"
-const META_DEPENDENCY = Symbol()
+const EXECUTION_ID = "_executionId"
+const META_DEPENDENCY = "_meta"
 /**
  * Enum for Dependency status
  * @readonly
@@ -417,6 +417,7 @@ class Context extends EventEmitter {
    * @return {Promise<void>}
    */
   shutdown() {
+    const id = crypto.randomUUID()
     return this._execInverse((d) => {
       const timeStart = performance.now()
       const shutdownPromise = d._shutdown()
@@ -427,6 +428,7 @@ class Context extends EventEmitter {
             timeEnd: performance.now(),
             context: this,
             dependency: d,
+            [EXECUTION_ID]: id,
           }
           hasShutdown && this.emit(CONTEXT_EVENTS.SUCCESS_SHUTDOWN, info)
         })
@@ -437,6 +439,7 @@ class Context extends EventEmitter {
             context: this,
             dependency: d,
             error,
+            [EXECUTION_ID]: id,
           }
           this.emit(CONTEXT_EVENTS.FAIL_SHUTDOWN, info)
         })
@@ -448,6 +451,8 @@ class Context extends EventEmitter {
    * @return {Promise<void>}
    */
   reset() {
+    const id = crypto.randomUUID()
+
     return this._execInverse((d) => {
       const timeStart = performance.now()
       const resetPromise = d.reset()
@@ -458,6 +463,7 @@ class Context extends EventEmitter {
             timeEnd: performance.now(),
             context: this,
             dependency: d,
+            [EXECUTION_ID]: id,
           }
           hasReset && this.emit(CONTEXT_EVENTS.SUCCESS_RESET, info)
         })
@@ -468,6 +474,7 @@ class Context extends EventEmitter {
             context: this,
             dependency: d,
             error,
+            [EXECUTION_ID]: id,
           }
           this.emit(CONTEXT_EVENTS.FAIL_RESET, info)
         })
@@ -515,6 +522,7 @@ function run(dep, params = {}, context = defaultContext) {
               timeEnd: performance.now(),
               context,
               dependency: dep,
+              [EXECUTION_ID]: id,
             }
             meta.timings.push(info)
             context.emit(CONTEXT_EVENTS.SUCCESS_RUN, info)
@@ -526,6 +534,7 @@ function run(dep, params = {}, context = defaultContext) {
               context,
               dependency: dep,
               error,
+              [EXECUTION_ID]: id,
             }
             // no point, the timings won't return
             // timings.push(info)
