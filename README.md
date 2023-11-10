@@ -260,7 +260,7 @@ Here is an example on how to use `getAdjacencyList` to print the adjacency list 
 
 ```js
 const adj = {}
-for (const d in dep.getAdjacencyList()) {
+for (const d of dep.getAdjacencyList()) {
   adj[d.name] = d.getEdges().map((d) => d.name)
 }
 console.log(JSON.stringify(adj))
@@ -372,26 +372,33 @@ module.exports = dbConnection
 It can be used to visualise the timing for the execution of the dependencies.
 
 ```js
-function writeServerTiming(timings, res) {
+function writeServerTiming(timings) {
   const timingsString = timings
     .map(
       ({ dependency, timeStart, timeEnd }) =>
         `${dependency.name};dur=${(timeEnd - timeStart).toFixed(2)}`
     )
     .join(",");
-  res.set("Server-Timing", timingsString);
+  return timingsString
 }
 ...
-// example of express.js controller
-app.get("/test", async (req, res) => {
-  const [text, { timings }] = await run([myDependency, META_DEPENDENCY], {
-    req,
-    res,
-  });
-  writeServerTiming(timings, res);
-  res.send(text);
+const [myDep, { timings }] = await run([myDependency, META_DEPENDENCY], {
+  req,
+  res,
 });
+const timingsHeader = writeServerTiming(timings);
+// this needs to be added to the Server-Timing header
+```
 
+## Use with a web framework
+
+Sistema integrates easily with any web framework (like Express.js, Fastify etc.).
+The suggested approach is to use the dependency to wrap the controller. For example with express:
+
+```js
+app.get("/test", async (req, res) => {
+  await test.run({ req, res })
+})
 ```
 
 ## Visualise dependencies

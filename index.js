@@ -6,6 +6,8 @@ const AsyncStatus = require("./asyncstatus")
 
 const EXECUTION_ID = "_executionId"
 const META_DEPENDENCY = "_meta"
+const GLOBAL_DEFAULT_CONTEXT = "_sistemaGlobalDefaultContext"
+
 /**
  * Enum for Dependency status
  * @readonly
@@ -483,7 +485,21 @@ class Context extends EventEmitter {
   }
 }
 
-const defaultContext = new Context("Default Context")
+// this is necessary to ensure the default context is a real singleton
+// some background info:
+// node doc (https://nodejs.org/api/modules.html#modules_module_caching_caveats)
+// states that a
+
+// @ts-ignore
+global[GLOBAL_DEFAULT_CONTEXT] =
+  // @ts-ignore
+  global[GLOBAL_DEFAULT_CONTEXT] != null
+    ? // @ts-ignore
+      global[GLOBAL_DEFAULT_CONTEXT]
+    : new Context("Default Context")
+
+// @ts-ignore
+const defaultContext = global[GLOBAL_DEFAULT_CONTEXT]
 
 /**
  * It runs one or more dependencies
